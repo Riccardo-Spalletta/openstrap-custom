@@ -5,11 +5,22 @@ on:
   push:
     branches: [ main ]
 
+permissions:
+  contents: write
+
 jobs:
   build-apk:
     name: Build Android APK
     runs-on: ubuntu-latest
     steps:
+      - name: Configure Swap Space
+        run: |
+          sudo fallocate -l 8G /swapfile || sudo dd if=/dev/zero of=/swapfile bs=1M count=8192
+          sudo chmod 600 /swapfile
+          sudo mkswap /swapfile
+          sudo swapon /swapfile
+          free -h
+
       - name: Checkout Code
         uses: actions/checkout@v4
         with:
@@ -39,9 +50,25 @@ jobs:
       - name: Build Android ARM64 Release APK
         run: flutter build apk --release --target-platform android-arm64 --dart-define-from-file=.env
 
-      - name: Upload APK
+      - name: Prepare APK Asset
+        run: |
+          cd build/app/outputs/flutter-apk
+          cp app-release.apk openstrap-custom-arm64.apk || cp *.apk openstrap-custom-arm64.apk
+          ls -la
+
+      - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: openstrap-custom-apk
-          path: build/app/outputs/flutter-apk/*.apk
+          path: build/app/outputs/flutter-apk/openstrap-custom-arm64.apk
           if-no-files-found: error
+
+      - name: Create or Update GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="v0.12.2-custom"
+          gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" \
+            --title "OpenStrap Custom v0.12.2" \
+            --notes "Custom build with Live Heart Rate card at top of Home screen and interactive chart navigation."
+          gh release upload "$TAG" build/app/outputs/flutter-apk/openstrap-custom-arm64.apk --clobber

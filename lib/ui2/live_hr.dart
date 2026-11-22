@@ -57,9 +57,9 @@ String? _nextDevice(AppState app, List<HealthSource> ranked, String? current) {
 }
 
 /// The live reading as a card: the number, and the recent readings behind it.
-class LiveHrCard extends StatelessWidget {
+class LiveHrCard extends StatefulWidget {
   /// The real one: reads the live stream off [AppState].
-  const LiveHrCard({super.key})
+  const LiveHrCard({super.key, this.onTap})
       : _hr = null,
         _trace = null,
         _preview = false;
@@ -68,22 +68,54 @@ class LiveHrCard extends StatelessWidget {
   /// no Provider above it, and a card that reached for one would either throw
   /// there or force every caller to thread state through. This is the same
   /// widget with its inputs handed to it.
-  const LiveHrCard.preview({super.key, required int hr, required List<int> trace})
-      : _hr = hr,
+  const LiveHrCard.preview({
+    super.key,
+    required int hr,
+    required List<int> trace,
+    this.onTap,
+  })  : _hr = hr,
         _trace = trace,
         _preview = true;
 
   final int? _hr;
   final List<int>? _trace;
   final bool _preview;
+  final VoidCallback? onTap;
+
+  @override
+  State<LiveHrCard> createState() => _LiveHrCardState();
+}
+
+class _LiveHrCardState extends State<LiveHrCard> {
+  AppState? _app;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!widget._preview) {
+      final app = context.read<AppState>();
+      if (_app != app) {
+        _app?.releaseLiveHrView();
+        _app = app;
+        _app?.retainLiveHrView();
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _app?.releaseLiveHrView();
+    _app = null;
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext c) {
     final p = P.of(c);
     final l = AppLocalizations.of(c);
-    final hr = _preview ? _hr : c.select<AppState, int?>((a) => a.liveHr);
+    final hr = widget._preview ? widget._hr : c.select<AppState, int?>((a) => a.liveHr);
     if (hr == null) {
-      if (_preview) return _absent(l, paired: true, connected: true);
+      if (widget._preview) return _absent(l, paired: true, connected: true);
       // SELECTED, not read: with no reading the only thing this widget watched
       // was `liveHr`, which stays null through both pairing and connecting — so
       // the card went on saying "No band is paired" after the band was paired
@@ -98,14 +130,14 @@ class LiveHrCard extends StatelessWidget {
     // A REVISION, not the length. Length is pinned at the cap once the buffer
     // is full, so watching it drew the first 90 readings and then froze.
     final List<int> trace;
-    if (_preview) {
-      trace = _trace ?? const [];
+    if (widget._preview) {
+      trace = widget._trace ?? const [];
     } else {
       c.select<AppState, int>((a) => a.liveHrTraceRev);
       trace = c.read<AppState>().liveHrTrace();
     }
 
-    return Surface(
+    final card = Surface(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -190,6 +222,7 @@ class LiveHrCard extends StatelessWidget {
         ],
       ]),
     );
+    return widget.onTap == null ? card : Pressable(onTap: widget.onTap, child: card);
   }
 
   /// No live reading. Three different facts, and only the one the app can

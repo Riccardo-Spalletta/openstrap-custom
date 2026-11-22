@@ -13,7 +13,7 @@ class TaskerReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val action = intent.action
         Log.i(TAG, "onReceive: action=$action")
-        if (action != ACTION_BUZZ_STRAP) return
+        if (action != ACTION_BUZZ_STRAP && action != "${context.packageName}.BUZZ_STRAP") return
 
         // The token rides as a plain intent extra. If Tasker (or anything
         // else) sends this as an IMPLICIT broadcast (no setPackage/

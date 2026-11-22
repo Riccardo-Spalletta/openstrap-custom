@@ -619,7 +619,7 @@ object NativeChannels {
      * Event → Intent Received.
      */
     private fun sendTaskerBroadcast(ctx: Context) {
-        val intent = Intent(ACTION_DOUBLE_TAP).apply {
+        val intent = Intent("${ctx.packageName}.DOUBLE_TAP").apply {
             addFlags(Intent.FLAG_INCLUDE_STOPPED_PACKAGES)
         }
         ctx.sendBroadcast(intent)

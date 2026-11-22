@@ -126,7 +126,7 @@
         android:required="false" />
 
     <application
-        android:label="Edge"
+        android:label="Edge Custom"
         android:name=".EdgeApplication"
         android:icon="@mipmap/launcher_icon"
         android:allowBackup="false"
@@ -245,7 +245,7 @@
             android:exported="true"
             android:enabled="true">
             <intent-filter>
-                <action android:name="wtf.openstrap.openstrap_edge.BUZZ_STRAP" />
+                <action android:name="${applicationId}.BUZZ_STRAP" />
             </intent-filter>
         </receiver>
 

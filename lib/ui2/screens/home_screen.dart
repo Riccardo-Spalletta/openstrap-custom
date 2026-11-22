@@ -73,6 +73,7 @@ import '../profile/profile.dart';
 import '../profile/wearable_numbers.dart'
     show WearableCells, kHomeWearableRows;
 import '../ui2.dart';
+import '../live_hr.dart';
 import '../guides/help_entry.dart';
 import 'ai_briefing.dart' show AiBriefingScreen;
 import 'coach.dart';
@@ -2560,6 +2561,15 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
             child: Text(l?.homeBackToToday ?? 'Back to today'),
           ),
         ),
+      // ── Live Heart Rate Card ──
+      // When viewing today, live heart rate sits prominently as the very first card on Home.
+      // Tapping it opens the detailed heart rate chart and metrics (MetricDetail).
+      if (isToday) ...[
+        const SizedBox(height: S.x3),
+        LiveHrCard(
+          onTap: () => go(c, const MetricDetail('resting_hr')),
+        ),
+      ],
       // A sync or a derive in flight on an ordinary morning. It used to show
       // only on a bare day, so yesterday's rings sat on screen during a sync
       // with nothing but a grey "Synced through" line to say anything moved.

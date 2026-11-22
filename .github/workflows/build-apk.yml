@@ -1,0 +1,47 @@
+name: Build Custom APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+
+jobs:
+  build-apk:
+    name: Build Android APK
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.41.6'
+          cache: true
+
+      - name: Create Dummy .env
+        run: |
+          echo "ENABLE_HEALTH_DATA_CONTRIBUTION=false" > .env
+          echo "COMPANION_URL=" >> .env
+          echo "BACKEND_URL=" >> .env
+
+      - name: Get Dependencies
+        run: flutter pub get
+
+      - name: Build Universal Release APK
+        run: flutter build apk --release --dart-define-from-file=.env
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: openstrap-custom-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error

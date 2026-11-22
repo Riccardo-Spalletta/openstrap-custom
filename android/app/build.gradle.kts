@@ -62,8 +62,8 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "wtf.openstrap.openstrap_edge"
+        // Unique Application ID for your custom standalone app build
+        applicationId = "wtf.openstrap.openstrap_custom"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = maxOf(26, flutter.minSdkVersion) // Health Connect requires API 26+

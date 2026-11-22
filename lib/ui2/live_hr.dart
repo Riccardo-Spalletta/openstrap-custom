@@ -172,7 +172,7 @@ class _LiveHrCardState extends State<LiveHrCard> {
               // WHOSE PULSE THIS IS, only when two devices are streaming. Below
               // that the row is byte-identical to today's: same Pill, same
               // position, no Pressable in the tree at all.
-              if (!_preview && c.select<AppState, bool>((a) => a.liveHrMultiDevice))
+              if (!widget._preview && c.select<AppState, bool>((a) => a.liveHrMultiDevice))
                 Builder(
                   builder: (c) {
                     final app = c.read<AppState>();

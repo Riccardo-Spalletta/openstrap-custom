@@ -198,7 +198,7 @@ class _OpenStrapAppState extends State<OpenStrapApp> with WidgetsBindingObserver
       child: GuideDimScope(controller: _guideRunner.dim, child: MaterialApp(
       scrollBehavior: const GuideScrollBehavior(),
       navigatorKey: _navigatorKey,
-      title: 'OpenStrap',
+      title: 'Poohw',
       debugShowCheckedModeBanner: false,
       // The palette is the design system's, the CHOICE is still the user's.
       theme: buildTheme(Brightness.light),

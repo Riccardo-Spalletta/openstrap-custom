@@ -82,9 +82,9 @@ class _Cover extends StatelessWidget {
       color: p.bg,
       child: Center(
         child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Icon(LucideIcons.activity, size: 44, color: p.on(C.green)),
+          Icon(LucideIcons.activity, size: 44, color: p.on(C.crimson)),
           const SizedBox(height: S.x4),
-          Text('OpenStrap', style: F.t2.copyWith(color: p.ink)),
+          Text('Poohw', style: F.t2.copyWith(color: p.ink)),
         ]),
       ),
     );

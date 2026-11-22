@@ -148,7 +148,7 @@ class _LiveHrCardState extends State<LiveHrCard> {
           Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Icon(LucideIcons.heart, size: 26, color: p.on(C.red)),
+              Icon(LucideIcons.heart, size: 26, color: p.on(C.crimson)),
               const SizedBox(width: S.x3),
               Expanded(
                 child: FittedBox(
@@ -186,12 +186,12 @@ class _LiveHrCardState extends State<LiveHrCard> {
                       semanticLabel:
                           l?.liveHrShowingDeviceSemantics(label) ??
                           'Showing $label. Tap to switch device.',
-                      child: Pill(label, C.red, icon: LucideIcons.radio),
+                      child: Pill(label, C.crimson, icon: LucideIcons.radio),
                     );
                   },
                 )
               else
-                Pill(l?.devicesLive ?? 'LIVE', C.red, icon: LucideIcons.radio),
+                Pill(l?.devicesLive ?? 'LIVE', C.crimson, icon: LucideIcons.radio),
             ],
           ),
         if (trace.length > 2) ...[
@@ -201,7 +201,7 @@ class _LiveHrCardState extends State<LiveHrCard> {
             child: CustomPaint(
               painter: LineChart(
                 [for (final v in trace) v.toDouble()],
-                C.red,
+                C.crimson,
                 fill: false,
               ),
               size: Size.infinite,

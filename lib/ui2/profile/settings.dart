@@ -2016,7 +2016,7 @@ class _AutomationSettingsState extends State<AutomationSettings> {
                           if (android) ...[
                             const SizedBox(height: S.x3),
                             SelectableText(
-                              'wtf.openstrap.openstrap_edge.SYNC_COMPLETE',
+                              'wtf.openstrap.openstrap_custom.SYNC_COMPLETE',
                               style: F.cap.copyWith(color: p.ink),
                             ),
                             const SizedBox(height: S.x1),
@@ -2051,7 +2051,7 @@ class _AutomationSettingsState extends State<AutomationSettings> {
                             android
                                 ? (l?.settingsBuzzFromShortcutAndroidBody ??
                                     'Send '
-                                        'wtf.openstrap.openstrap_edge.BUZZ_STRAP '
+                                        'wtf.openstrap.openstrap_custom.BUZZ_STRAP '
                                         'with this token as the “token” string '
                                         'extra. Without it any app on the phone '
                                         'could buzz your band.')

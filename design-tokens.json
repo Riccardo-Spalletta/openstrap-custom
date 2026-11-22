@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json.schemastore.org/design-tokens.json",
+  "name": "Poohw Precision Metal",
+  "version": "1.0.0",
+  "color": {
+    "brand": {
+      "silver-light": { "value": "#F8FAFC", "type": "color" },
+      "silver-mid": { "value": "#E2E8F0", "type": "color" },
+      "silver-dark": { "value": "#94A3B8", "type": "color" },
+      "crimson": { "value": "#FF1E38", "type": "color" },
+      "crimson-glow": { "value": "#FF4D63", "type": "color" },
+      "crimson-deep": { "value": "#B91C1C", "type": "color" }
+    },
+    "surface": {
+      "bg-dark": { "value": "#0A0D13", "type": "color" },
+      "card-dark": { "value": "#121722", "type": "color" },
+      "card2-dark": { "value": "#1A2130", "type": "color" },
+      "line-dark": { "value": "#242D3D", "type": "color" },
+      "bevel-highlight": { "value": "rgba(255, 255, 255, 0.14)", "type": "color" },
+      "bevel-shadow": { "value": "rgba(0, 0, 0, 0.45)", "type": "color" }
+    },
+    "domain": {
+      "today": { "value": "#FF1E38", "type": "color" },
+      "sleep": { "value": "#CBD5E1", "type": "color" },
+      "activity": { "value": "#FF2A3A", "type": "color" },
+      "health": { "value": "#E2E8F0", "type": "color" }
+    }
+  },
+  "radii": {
+    "sm": { "value": "8px", "type": "borderRadius" },
+    "md": { "value": "12px", "type": "borderRadius" },
+    "lg": { "value": "16px", "type": "borderRadius" },
+    "xl": { "value": "24px", "type": "borderRadius" },
+    "pill": { "value": "999px", "type": "borderRadius" }
+  },
+  "motion": {
+    "fast": { "value": "120ms", "type": "duration" },
+    "base": { "value": "180ms", "type": "duration" },
+    "slow": { "value": "280ms", "type": "duration" },
+    "metallic-sweep": { "value": "3500ms", "type": "duration" }
+  }
+}

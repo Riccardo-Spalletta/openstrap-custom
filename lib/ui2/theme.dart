@@ -48,6 +48,13 @@ class C {
   static const pink = Color(0xFFEC4899);
   static const indigo = Color(0xFF6366F1);
 
+  // Poohw Precision Metal & Crimson
+  static const crimson = Color(0xFFFF1E38);
+  static const crimsonD = Color(0xFFDC2626);
+  static const silver = Color(0xFFE2E8F0);
+  static const silverBright = Color(0xFFF8FAFC);
+  static const silverDark = Color(0xFF94A3B8);
+
   /// Two light blues the ramps need and nothing else does: the light-sleep
   /// lane sits between REM and deep, and zone 1 sits below `blue`. They live
   /// here rather than inside the painters because a palette that is partly in
@@ -110,7 +117,7 @@ class C {
   /// Each domain owns an accent — the mental map is colour-coded, and the map
   /// is the point. Today, Sleep, Activity and Health are the four tabs; food
   /// and mind keep their accents as sections inside Activity and Health.
-  static const domHome = green;
+  static const domHome = crimson;
   static const domSleep = indigo;
   static const domHealth = blue;
   static const domFood = orange;
@@ -122,6 +129,7 @@ class C {
   static const all = <Color>[
     green, greenD, blue, purple, orange, red, teal, yellow, pink, indigo,
     sky, blueSoft,
+    crimson, crimsonD, silver, silverBright, silverDark,
     domHome, domSleep, domHealth, domFood, domMove, domMind,
   ];
 }
@@ -135,11 +143,22 @@ class P {
 
   static P of(BuildContext c) => P(Theme.of(c).brightness == Brightness.dark);
 
-  Color get bg => dark ? const Color(0xFF0B1017) : C.n50;
-  Color get card => dark ? const Color(0xFF151C26) : C.white;
-  Color get card2 => dark ? const Color(0xFF1D2632) : C.n100;
-  Color get line => dark ? const Color(0xFF232D3B) : C.n200;
-  Color get track => dark ? const Color(0xFF232D3B) : C.n200;
+  Color get bg => dark ? const Color(0xFF0A0D13) : C.n50;
+  Color get card => dark ? const Color(0xFF121722) : C.white;
+  Color get card2 => dark ? const Color(0xFF1B222F) : C.n100;
+  Color get line => dark ? const Color(0xFF242D3D) : C.n200;
+  Color get track => dark ? const Color(0xFF242D3D) : C.n200;
+
+  /// Top/left 3D highlight rim on metallic surfaces.
+  Color get bevelHighlight => dark ? const Color(0x24FFFFFF) : const Color(0x40FFFFFF);
+
+  /// Bottom/right 3D ambient shadow rim on metallic surfaces.
+  Color get bevelShadow => dark ? const Color(0x73000000) : const Color(0x14000000);
+
+  /// Metallic sheen gradient start / mid / peak.
+  Color get metallicSheenLow => const Color(0x00FFFFFF);
+  Color get metallicSheenMid => dark ? const Color(0x14FFFFFF) : const Color(0x28FFFFFF);
+  Color get metallicSheenHigh => dark ? const Color(0x2EFFFFFF) : const Color(0x44FFFFFF);
 
   /// The colour an elevated surface casts. Black in the dark theme: a navy
   /// shadow is lighter than the dark page and reads as a glow, not a shadow.
@@ -449,6 +468,18 @@ class Motion {
   /// The ECG live-preview repaint cadence: incoming packets only mark the
   /// ring dirty, and the screen's clock repaints at most this often.
   static const ecgPreviewTick = Duration(milliseconds: 100);
+
+  /// The ambient metallic reflection sweep period.
+  static const metallicSweep = Duration(milliseconds: 3200);
+  static void configureMetallicClock(AnimationController clock, {required bool enabled}) {
+    clock.duration = metallicSweep;
+    if (enabled) {
+      if (!clock.isAnimating) clock.repeat();
+    } else {
+      clock.stop();
+      clock.value = 0.0;
+    }
+  }
 }
 
 /// Collapse [d] to zero when the user has asked for reduced motion. Every
@@ -503,7 +534,7 @@ ThemeData buildTheme(Brightness b) {
     brightness: b,
     scaffoldBackgroundColor: p.bg,
     colorScheme:
-        ColorScheme.fromSeed(seedColor: C.green, brightness: b, surface: p.card),
+        ColorScheme.fromSeed(seedColor: C.crimson, brightness: b, surface: p.card),
     fontFamily: '.SF Pro Text',
     fontFamilyFallback: const ['Manrope'],
     splashFactory: NoSplash.splashFactory,

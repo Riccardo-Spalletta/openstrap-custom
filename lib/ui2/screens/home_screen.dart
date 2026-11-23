@@ -3256,16 +3256,16 @@ class _PoohwUpdateCardState extends State<_PoohwUpdateCard> {
     _sub = UpdateService.install(apkUrl).listen(
       (progress) {
         if (!mounted) return;
-        if (progress.status == 'downloading') {
+        if (progress.phase == 'downloading') {
           setState(() {
             _percent = progress.percent;
           });
-        } else if (progress.status == 'installing') {
+        } else if (progress.phase == 'installing') {
           setState(() {
             _installing = true;
             _percent = 100;
           });
-        } else if (progress.status == 'error') {
+        } else if (progress.phase == 'error') {
           setState(() {
             _error = progress.message ?? 'Errore download';
             _percent = null;
@@ -3290,6 +3290,12 @@ class _PoohwUpdateCardState extends State<_PoohwUpdateCard> {
     final app = c.watch<AppState>();
     final update = app.appStatus?.update;
     if (update == null || !app.updateAvailable) return const SizedBox.shrink();
+    final apkUrl = update.apkUrl;
+    if (apkUrl == null || apkUrl.isEmpty) return const SizedBox.shrink();
+
+    final versionText = (update.latestVersion != null && update.latestVersion!.isNotEmpty)
+        ? update.latestVersion!
+        : 'Nuova versione rilasciata';
 
     return Surface(
       pad: const EdgeInsets.all(S.x4),
@@ -3317,7 +3323,7 @@ class _PoohwUpdateCardState extends State<_PoohwUpdateCard> {
                     ),
                     const SizedBox(height: S.x1),
                     Text(
-                      update.latestVersion.isNotEmpty ? update.latestVersion : 'Nuova versione rilasciata',
+                      versionText,
                       style: F.cap.copyWith(color: p.ink2),
                     ),
                   ],
@@ -3358,7 +3364,7 @@ class _PoohwUpdateCardState extends State<_PoohwUpdateCard> {
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
                 Pressable(
-                  onTap: () => UpdateService.openInBrowser(update.apkUrl),
+                  onTap: () => UpdateService.openInBrowser(apkUrl),
                   semanticLabel: 'GitHub',
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: S.x3, vertical: S.x2),
@@ -3374,7 +3380,7 @@ class _PoohwUpdateCardState extends State<_PoohwUpdateCard> {
                 ),
                 const SizedBox(width: S.x2),
                 Pressable(
-                  onTap: () => _startUpdate(update.apkUrl),
+                  onTap: () => _startUpdate(apkUrl),
                   semanticLabel: 'Aggiorna ora',
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: S.x4, vertical: S.x2),

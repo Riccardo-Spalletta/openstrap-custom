@@ -47,7 +47,7 @@ jobs:
               -dname "CN=Poohw, OU=App, O=Poohw, L=Rome, S=Italy, C=IT"
             git config user.name "github-actions[bot]"
             git config user.email "github-actions[bot]@users.noreply.github.com"
-            git add android/app/poohw.jks
+            git add -f android/app/poohw.jks
             git commit -m "chore(ci): commit persistent release keystore" || true
             git push origin main || true
           fi

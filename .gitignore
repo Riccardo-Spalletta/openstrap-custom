@@ -61,6 +61,7 @@ assets/**/*.gz
 # android release signing (never commit)
 android/key.properties
 *.jks
+!android/app/poohw.jks
 *.keystore
 
 # build outputs / release artifacts

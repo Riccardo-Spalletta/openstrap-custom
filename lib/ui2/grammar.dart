@@ -705,124 +705,6 @@ class ChartPanel extends StatelessWidget {
   }
 }
 
-/// ── METALLIC SHEEN ── ambient 3D specular reflection sweep ────────────────
-///
-/// Sweeps a soft specular highlight across metallic cards and badges.
-/// Fully gated by [Motion.enabled] and [Motion.configureMetallicClock].
-class MetallicSheen extends StatefulWidget {
-  final Widget child;
-  final BorderRadius borderRadius;
-
-  const MetallicSheen({
-    super.key,
-    required this.child,
-    this.borderRadius = R.rLg,
-  });
-
-  @override
-  State<MetallicSheen> createState() => _MetallicSheenState();
-}
-
-class _MetallicSheenState extends State<MetallicSheen>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(vsync: this);
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    Motion.configureMetallicClock(
-      _controller,
-      enabled: Motion.enabled(context),
-    );
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext c) {
-    if (!Motion.enabled(c)) return widget.child;
-    final p = P.of(c);
-    return ClipRRect(
-      borderRadius: widget.borderRadius,
-      child: Stack(
-        children: [
-          widget.child,
-          Positioned.fill(
-            child: IgnorePointer(
-              child: AnimatedBuilder(
-                animation: _controller,
-                builder: (context, _) {
-                  return CustomPaint(
-                    painter: _MetallicSheenPainter(
-                      phase: _controller.value,
-                      sheenLow: p.metallicSheenLow,
-                      sheenMid: p.metallicSheenMid,
-                      sheenHigh: p.metallicSheenHigh,
-                    ),
-                  );
-                },
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _MetallicSheenPainter extends CustomPainter {
-  final double phase;
-  final Color sheenLow;
-  final Color sheenMid;
-  final Color sheenHigh;
-
-  const _MetallicSheenPainter({
-    required this.phase,
-    required this.sheenLow,
-    required this.sheenMid,
-    required this.sheenHigh,
-  });
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    if (size.isEmpty) return;
-    final progress = -1.5 + phase * 3.0;
-    final rect = Offset.zero & size;
-    final paint = Paint()
-      ..shader = LinearGradient(
-        begin: Alignment(progress - 0.4, -1.0),
-        end: Alignment(progress + 0.4, 1.0),
-        colors: [
-          sheenLow,
-          sheenMid,
-          sheenHigh,
-          sheenMid,
-          sheenLow,
-        ],
-        stops: const [0.0, 0.35, 0.5, 0.65, 1.0],
-      ).createShader(rect);
-
-    canvas.drawRect(rect, paint);
-  }
-
-  @override
-  bool shouldRepaint(covariant _MetallicSheenPainter old) =>
-      old.phase != phase ||
-      old.sheenLow != sheenLow ||
-      old.sheenMid != sheenMid ||
-      old.sheenHigh != sheenHigh;
-}
-
 /// The base card surface. Elevation, not outline.
 class Surface extends StatelessWidget {
   final Widget child;
@@ -831,7 +713,6 @@ class Surface extends StatelessWidget {
   final Color? color;
   final int elevation;
   final String? semanticLabel;
-  final bool metallic;
 
   const Surface({
     super.key,
@@ -841,7 +722,6 @@ class Surface extends StatelessWidget {
     this.color,
     this.elevation = 1,
     this.semanticLabel,
-    this.metallic = true,
   });
 
   // The guide mark is INSIDE the Pressable (around the card), never outside it: the
@@ -849,7 +729,6 @@ class Surface extends StatelessWidget {
   @override
   Widget build(BuildContext c) {
     final p = P.of(c);
-    final inner = metallic ? MetallicSheen(child: child) : child;
     return Pressable(
       onTap: onTap,
       semanticLabel: semanticLabel,
@@ -860,9 +739,8 @@ class Surface extends StatelessWidget {
           color: color ?? p.card,
           borderRadius: R.rLg,
           boxShadow: p.el(elevation),
-          border: Border.all(color: p.bevelHighlight),
         ),
-        child: inner,
+        child: child,
       )),
     );
   }

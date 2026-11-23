@@ -149,16 +149,11 @@ class P {
   Color get line => dark ? const Color(0xFF242D3D) : C.n200;
   Color get track => dark ? const Color(0xFF242D3D) : C.n200;
 
-  /// Top/left 3D highlight rim on metallic surfaces.
+  /// Top/left 3D highlight rim on surfaces.
   Color get bevelHighlight => dark ? const Color(0x24FFFFFF) : const Color(0x40FFFFFF);
 
-  /// Bottom/right 3D ambient shadow rim on metallic surfaces.
+  /// Bottom/right 3D ambient shadow rim on surfaces.
   Color get bevelShadow => dark ? const Color(0x73000000) : const Color(0x14000000);
-
-  /// Metallic sheen gradient start / mid / peak.
-  Color get metallicSheenLow => const Color(0x00FFFFFF);
-  Color get metallicSheenMid => dark ? const Color(0x14FFFFFF) : const Color(0x28FFFFFF);
-  Color get metallicSheenHigh => dark ? const Color(0x2EFFFFFF) : const Color(0x44FFFFFF);
 
   /// The colour an elevated surface casts. Black in the dark theme: a navy
   /// shadow is lighter than the dark page and reads as a glow, not a shadow.
@@ -468,18 +463,6 @@ class Motion {
   /// The ECG live-preview repaint cadence: incoming packets only mark the
   /// ring dirty, and the screen's clock repaints at most this often.
   static const ecgPreviewTick = Duration(milliseconds: 100);
-
-  /// The ambient metallic reflection sweep period.
-  static const metallicSweep = Duration(milliseconds: 3200);
-  static void configureMetallicClock(AnimationController clock, {required bool enabled}) {
-    clock.duration = metallicSweep;
-    if (enabled) {
-      if (!clock.isAnimating) clock.repeat();
-    } else {
-      clock.stop();
-      clock.value = 0.0;
-    }
-  }
 }
 
 /// Collapse [d] to zero when the user has asked for reduced motion. Every

@@ -36,6 +36,28 @@ jobs:
           echo "COMPANION_URL=" >> .env
           echo "BACKEND_URL=" >> .env
 
+      - name: Configure Persistent Release Keystore
+        run: |
+          mkdir -p android/app
+          if [ ! -f android/app/poohw.jks ]; then
+            echo "Generating persistent keystore..."
+            keytool -genkeypair -v -keystore android/app/poohw.jks \
+              -alias poohw -keyalg RSA -keysize 2048 -validity 10000 \
+              -storepass poohwkeystore -keypass poohwkeystore \
+              -dname "CN=Poohw, OU=App, O=Poohw, L=Rome, S=Italy, C=IT"
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add android/app/poohw.jks
+            git commit -m "chore(ci): commit persistent release keystore" || true
+            git push origin main || true
+          fi
+          cat << 'EOF' > android/key.properties
+          storeFile=poohw.jks
+          storePassword=poohwkeystore
+          keyAlias=poohw
+          keyPassword=poohwkeystore
+          EOF
+
       - name: Get Dependencies
         run: flutter pub get
 

@@ -6287,14 +6287,14 @@ class AppState extends ChangeNotifier {
     final list = customVibrations.where((v) => v.id != vibration.id).toList();
     list.add(vibration);
     final encoded = jsonEncode(list.map((v) => v.toJson()).toList());
-    await Prefs.setString(_kCustomVibrations, encoded);
+    Prefs.setString(_kCustomVibrations, encoded);
     notifyListeners();
   }
 
   Future<void> deleteCustomVibration(String id) async {
     final list = customVibrations.where((v) => v.id != id).toList();
     final encoded = jsonEncode(list.map((v) => v.toJson()).toList());
-    await Prefs.setString(_kCustomVibrations, encoded);
+    Prefs.setString(_kCustomVibrations, encoded);
     notifyListeners();
   }
 

@@ -154,7 +154,7 @@ Azione: Invia Intent
                 ),
                 child: Text(
                   fullText,
-                  style: F.mono.copyWith(color: C.silverBright, fontSize: 11),
+                  style: F.cap.copyWith(color: C.silverBright, fontSize: 11, fontFamily: 'monospace'),
                 ),
               ),
             ],

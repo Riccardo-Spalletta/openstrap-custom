@@ -45,6 +45,7 @@ import 'package:openstrap_protocol/openstrap_protocol.dart';
 
 import '../data/db.dart';
 import '../data/models.dart';
+import '../models/vibration_pattern.dart';
 import '../platform/tasker_bridge.dart';
 import '../sync/paired_device.dart' show cleanDeviceLabel;
 import '../sync/sync_policy.dart';
@@ -9070,6 +9071,31 @@ class BleEngine {
   /// [buzzPattern] that reports whether the command reached the strap (see
   /// [buzzDelivered]); a queued Tasker buzz stays queued until this is true.
   Future<bool> buzzPatternDelivered(int pattern) => _sendBuzz(pattern);
+
+  /// Play an arbitrary multi-step sequence of vibration pulses and pauses.
+  Future<bool> playVibrationSequence(List<VibrationStep> steps) async {
+    if (steps.isEmpty) return false;
+    bool anyDelivered = false;
+    for (var i = 0; i < steps.length; i++) {
+      final step = steps[i];
+      if (step.type == VibrationStepType.pause) {
+        await Future.delayed(Duration(milliseconds: step.durationMs.clamp(50, 3000)));
+      } else {
+        final pattern = switch (step.type) {
+          VibrationStepType.single => 0,
+          VibrationStepType.doubleTap => 2,
+          VibrationStepType.alarm => 1,
+          VibrationStepType.pause => 0,
+        };
+        final ok = await buzzPatternDelivered(pattern);
+        if (ok) anyDelivered = true;
+        if (i < steps.length - 1 && steps[i + 1].type != VibrationStepType.pause) {
+          await Future.delayed(const Duration(milliseconds: 250));
+        }
+      }
+    }
+    return anyDelivered;
+  }
 
   Future<bool> _sendBuzz(int pattern) {
     if (_session?.band.isGen5 ?? false) {

@@ -259,6 +259,10 @@ object NativeChannels {
                         } else {
                             val args = java.util.HashMap<String, Any?>()
                             args["pattern"] = prefs.getInt(TaskerReceiver.PENDING_PATTERN_KEY, TaskerReceiver.DEFAULT_PATTERN)
+                            args["patternName"] = prefs.getString(TaskerReceiver.PENDING_PATTERN_NAME_KEY, null)
+                            args["sequence"] = prefs.getString(TaskerReceiver.PENDING_SEQUENCE_KEY, null)
+                            args["count"] = prefs.getInt(TaskerReceiver.PENDING_COUNT_KEY, 1)
+                            args["delayMs"] = prefs.getInt(TaskerReceiver.PENDING_DELAY_KEY, 350)
                             // Absent on a flag queued by an older build; Dart
                             // treats that as stale rather than guessing an age.
                             args["requestedAtMs"] =
@@ -281,6 +285,10 @@ object NativeChannels {
                         prefs.edit()
                             .remove(TaskerReceiver.PENDING_BUZZ_KEY)
                             .remove(TaskerReceiver.PENDING_PATTERN_KEY)
+                            .remove(TaskerReceiver.PENDING_PATTERN_NAME_KEY)
+                            .remove(TaskerReceiver.PENDING_SEQUENCE_KEY)
+                            .remove(TaskerReceiver.PENDING_COUNT_KEY)
+                            .remove(TaskerReceiver.PENDING_DELAY_KEY)
                             .remove(TaskerReceiver.PENDING_AT_KEY)
                             .apply()
                         result.success(null)

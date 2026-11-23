@@ -74,4 +74,22 @@ void main() {
     );
     expect(delivered, 1);
   });
+
+  test('custom vibration extras are parsed correctly', () async {
+    mockPeek({
+      'pattern': 0,
+      'patternName': 'banca',
+      'sequence': '0,200,2',
+      'count': 3,
+      'delayMs': 400,
+      'requestedAtMs': now.millisecondsSinceEpoch - 1000,
+    });
+    final p = await TaskerBridge.peekPendingBuzz();
+    expect(p, isNotNull);
+    expect(p!.patternName, 'banca');
+    expect(p.sequence, '0,200,2');
+    expect(p.count, 3);
+    expect(p.delayMs, 400);
+    expect(p.isFresh(now), isTrue);
+  });
 }

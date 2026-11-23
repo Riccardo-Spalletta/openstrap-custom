@@ -246,6 +246,13 @@
             android:enabled="true">
             <intent-filter>
                 <action android:name="${applicationId}.BUZZ_STRAP" />
+                <action android:name="${applicationId}.BUZZ_CUSTOM" />
+                <action android:name="${applicationId}.BUZZ_SINGLE" />
+                <action android:name="${applicationId}.BUZZ_DOUBLE" />
+                <action android:name="${applicationId}.BUZZ_TRIPLE" />
+                <action android:name="${applicationId}.BUZZ_ALARM" />
+                <action android:name="${applicationId}.BUZZ_SOS" />
+                <action android:name="wtf.openstrap.openstrap_edge.BUZZ_STRAP" />
             </intent-filter>
         </receiver>
 

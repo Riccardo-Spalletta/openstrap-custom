@@ -13,7 +13,16 @@ class TaskerReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val action = intent.action
         Log.i(TAG, "onReceive: action=$action")
-        if (action != ACTION_BUZZ_STRAP && action != "${context.packageName}.BUZZ_STRAP") return
+        val pkg = context.packageName
+        val isBuzzAction = action == ACTION_BUZZ_STRAP ||
+                action == "$pkg.BUZZ_STRAP" ||
+                action == "$pkg.BUZZ_CUSTOM" ||
+                action == "$pkg.BUZZ_SINGLE" ||
+                action == "$pkg.BUZZ_DOUBLE" ||
+                action == "$pkg.BUZZ_TRIPLE" ||
+                action == "$pkg.BUZZ_ALARM" ||
+                action == "$pkg.BUZZ_SOS"
+        if (!isBuzzAction) return
 
         // The token rides as a plain intent extra. If Tasker (or anything
         // else) sends this as an IMPLICIT broadcast (no setPackage/
@@ -51,8 +60,32 @@ class TaskerReceiver : BroadcastReceiver() {
         }
         lastAcceptedElapsedMs = nowElapsed
 
-        val pattern = intent.getIntExtra(EXTRA_PATTERN, DEFAULT_PATTERN)
-        Log.i(TAG, "pattern=$pattern")
+        var patternName: String? = intent.getStringExtra(EXTRA_NAME)
+        if (patternName == null) {
+            patternName = when (action) {
+                "$pkg.BUZZ_SINGLE" -> "single"
+                "$pkg.BUZZ_DOUBLE" -> "double"
+                "$pkg.BUZZ_TRIPLE" -> "triple"
+                "$pkg.BUZZ_ALARM" -> "alarm"
+                "$pkg.BUZZ_SOS" -> "sos"
+                else -> intent.getStringExtra(EXTRA_PATTERN)
+            }
+        }
+
+        var pattern = intent.getIntExtra(EXTRA_PATTERN, -1)
+        if (pattern == -1) {
+            pattern = when (patternName?.lowercase()) {
+                "single" -> 0
+                "alarm" -> 1
+                "double" -> 2
+                else -> DEFAULT_PATTERN
+            }
+        }
+
+        val sequence = intent.getStringExtra(EXTRA_SEQUENCE)
+        val count = intent.getIntExtra(EXTRA_COUNT, 1).coerceIn(1, 10)
+        val delayMs = intent.getIntExtra(EXTRA_DELAY_MS, 350).coerceIn(50, 3000)
+        Log.i(TAG, "pattern=$pattern, name=$patternName, seq=$sequence, count=$count, delayMs=$delayMs")
 
         // Persist first, on both paths. A cached engine is no promise of
         // delivery: a just-created engine may not have registered the Dart
@@ -64,17 +97,26 @@ class TaskerReceiver : BroadcastReceiver() {
             "openstrap_runtime",
             Context.MODE_PRIVATE
         )
-        prefs.edit()
+        val editor = prefs.edit()
             .putBoolean(PENDING_BUZZ_KEY, true)
             .putInt(PENDING_PATTERN_KEY, pattern)
-            // A buzz is a time-bound cue (rest timer over, reminder). Without
-            // the request time a queued buzz would fire on whatever reconnect
-            // comes next, possibly hours later; Dart drops it once stale.
+            .putInt(PENDING_COUNT_KEY, count)
+            .putInt(PENDING_DELAY_KEY, delayMs)
             .putLong(PENDING_AT_KEY, System.currentTimeMillis())
-            // commit, not apply: if the service start below is refused the
-            // flag is the only record of this buzz, and the next app launch
-            // replays it from disk.
-            .commit()
+
+        if (patternName != null) {
+            editor.putString(PENDING_PATTERN_NAME_KEY, patternName)
+        } else {
+            editor.remove(PENDING_PATTERN_NAME_KEY)
+        }
+
+        if (sequence != null) {
+            editor.putString(PENDING_SEQUENCE_KEY, sequence)
+        } else {
+            editor.remove(PENDING_SEQUENCE_KEY)
+        }
+
+        editor.commit()
 
         val engine = FlutterEngineCache.getInstance()
             .get(EdgeApplication.ENGINE_ID)
@@ -97,9 +139,17 @@ class TaskerReceiver : BroadcastReceiver() {
         const val ACTION_BUZZ_STRAP =
             "wtf.openstrap.openstrap_edge.BUZZ_STRAP"
         const val EXTRA_PATTERN = "pattern"
+        const val EXTRA_NAME = "name"
+        const val EXTRA_SEQUENCE = "sequence"
+        const val EXTRA_COUNT = "count"
+        const val EXTRA_DELAY_MS = "delay_ms"
         const val EXTRA_TOKEN = "token"
         const val PENDING_BUZZ_KEY = "pending_tasker_buzz"
         const val PENDING_PATTERN_KEY = "pending_tasker_buzz_pattern"
+        const val PENDING_PATTERN_NAME_KEY = "pending_tasker_buzz_pattern_name"
+        const val PENDING_SEQUENCE_KEY = "pending_tasker_buzz_sequence"
+        const val PENDING_COUNT_KEY = "pending_tasker_buzz_count"
+        const val PENDING_DELAY_KEY = "pending_tasker_buzz_delay_ms"
         const val PENDING_AT_KEY = "pending_tasker_buzz_at_ms"
         const val DEFAULT_PATTERN = 2
         private const val MIN_INTERVAL_MS = 1500L

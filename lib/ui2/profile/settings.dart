@@ -45,6 +45,7 @@ import 'gallery.dart';
 import 'gestures.dart';
 import 'profile.dart';
 import 'report_issue.dart';
+import 'vibration_editor.dart';
 import 'wearable_numbers.dart' show WearableDisplay, wearableSettingsGroup;
 
 /// Unwind the profile stack back to the gate.
@@ -932,6 +933,10 @@ class MoreSettingsView extends StatelessWidget {
                         onTap: onToggleUpdateChecks),
                 ]),
                 settingsGroup(c, l?.settingsGroupAdvanced ?? 'Advanced', [
+                  SetRow(LucideIcons.vibrate, C.crimson,
+                      'Vibrazioni personalizzate',
+                      sub: 'Componi ritmi al polso e associali alle notifiche di MacroDroid',
+                      onTap: () => goto(c, const VibrationEditorScreen())),
                   SetRow(LucideIcons.workflow, C.indigo,
                       l?.settingsTaskerShortcutsRowTitle ??
                           'Tasker and Shortcuts',
@@ -2084,6 +2089,13 @@ class _AutomationSettingsState extends State<AutomationSettings> {
                                   color: C.indigo,
                                   soft: true,
                                   onTap: _copy),
+                              const SizedBox(height: S.x3),
+                              BigButton(
+                                  'Componi vibrazioni personalizzate',
+                                  icon: LucideIcons.vibrate,
+                                  color: C.crimson,
+                                  soft: false,
+                                  onTap: () => goto(c, const VibrationEditorScreen())),
                             ],
                           ],
                         ]),

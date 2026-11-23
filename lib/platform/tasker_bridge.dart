@@ -6,12 +6,23 @@ import 'package:flutter/services.dart';
 /// A BUZZ_STRAP that TaskerReceiver queued while the app was dead.
 class PendingTaskerBuzz {
   final int pattern;
+  final String? patternName;
+  final String? sequence;
+  final int count;
+  final int delayMs;
 
   /// Wall-clock ms when the broadcast arrived; null for a flag queued by a
   /// build that did not record it.
   final int? requestedAtMs;
 
-  const PendingTaskerBuzz({required this.pattern, this.requestedAtMs});
+  const PendingTaskerBuzz({
+    required this.pattern,
+    this.patternName,
+    this.sequence,
+    this.count = 1,
+    this.delayMs = 350,
+    this.requestedAtMs,
+  });
 
   /// How long a queued buzz stays worth delivering. A buzz is a time-bound
   /// cue (rest timer over, reminder); the queue otherwise waits for any later
@@ -23,8 +34,16 @@ class PendingTaskerBuzz {
     final pattern = raw['pattern'];
     if (pattern is! int) return null;
     final at = raw['requestedAtMs'];
+    final name = raw['patternName'] as String?;
+    final seq = raw['sequence'] as String?;
+    final count = (raw['count'] as num?)?.toInt() ?? 1;
+    final delayMs = (raw['delayMs'] as num?)?.toInt() ?? 350;
     return PendingTaskerBuzz(
       pattern: pattern,
+      patternName: name,
+      sequence: seq,
+      count: count.clamp(1, 10),
+      delayMs: delayMs.clamp(50, 3000),
       requestedAtMs: at is int ? at : null,
     );
   }

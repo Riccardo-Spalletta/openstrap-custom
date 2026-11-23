@@ -92,6 +92,7 @@ import 'sync_controller.dart';
 import 'workout_controller.dart';
 import 'smart_wake.dart';
 import 'prefs.dart';
+import '../models/vibration_pattern.dart';
 import '../ble/adapters/signals.dart' show InputSignal;
 import '../ui2/profile/devices.dart' show liveSources, rankSources;
 import '../data/db.dart';
@@ -3511,8 +3512,33 @@ class AppState extends ChangeNotifier {
         await TaskerBridge.clearPendingBuzz(requestedAtMs: latest.requestedAtMs);
         return;
       }
-      _log('[tasker] consuming pending buzz (pattern=${latest.pattern})');
-      if (!await engine.buzzPatternDelivered(latest.pattern)) {
+      _log('[tasker] consuming pending buzz (pattern=${latest.pattern}, name=${latest.patternName}, seq=${latest.sequence}, count=${latest.count})');
+      bool delivered = false;
+      if (latest.sequence != null && latest.sequence!.isNotEmpty) {
+        final steps = CustomVibration.parseSequenceString(latest.sequence!);
+        delivered = await engine.playVibrationSequence(steps);
+      } else if (latest.patternName != null && latest.patternName!.isNotEmpty) {
+        delivered = await playCustomVibrationByName(latest.patternName!);
+      } else if (latest.count > 1) {
+        final steps = <VibrationStep>[];
+        for (var i = 0; i < latest.count; i++) {
+          final type = switch (latest.pattern) {
+            0 => VibrationStepType.single,
+            1 => VibrationStepType.alarm,
+            2 => VibrationStepType.doubleTap,
+            _ => VibrationStepType.single,
+          };
+          steps.add(VibrationStep(type));
+          if (i < latest.count - 1) {
+            steps.add(VibrationStep(VibrationStepType.pause, latest.delayMs));
+          }
+        }
+        delivered = await engine.playVibrationSequence(steps);
+      } else {
+        delivered = await engine.buzzPatternDelivered(latest.pattern);
+      }
+
+      if (!delivered) {
         _log('[tasker] buzz write failed — still queued for the next reconnect');
         return;
       }
@@ -6238,6 +6264,59 @@ class AppState extends ChangeNotifier {
     } catch (_) {
       // Best-effort by design: the next tick will try again.
     }
+  }
+
+  static const String _kCustomVibrations = 'custom_vibrations_json';
+
+  List<CustomVibration> get customVibrations {
+    final raw = Prefs.getString(_kCustomVibrations, '');
+    if (raw.isEmpty) return const [];
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is List) {
+        return decoded
+            .whereType<Map>()
+            .map((m) => CustomVibration.fromJson(m.cast<String, dynamic>()))
+            .toList();
+      }
+    } catch (_) {}
+    return const [];
+  }
+
+  Future<void> saveCustomVibration(CustomVibration vibration) async {
+    final list = customVibrations.where((v) => v.id != vibration.id).toList();
+    list.add(vibration);
+    final encoded = jsonEncode(list.map((v) => v.toJson()).toList());
+    await Prefs.setString(_kCustomVibrations, encoded);
+    notifyListeners();
+  }
+
+  Future<void> deleteCustomVibration(String id) async {
+    final list = customVibrations.where((v) => v.id != id).toList();
+    final encoded = jsonEncode(list.map((v) => v.toJson()).toList());
+    await Prefs.setString(_kCustomVibrations, encoded);
+    notifyListeners();
+  }
+
+  Future<bool> playCustomVibration(CustomVibration vibration) async {
+    if (!isConnected) return false;
+    return engine.playVibrationSequence(vibration.steps);
+  }
+
+  Future<bool> playCustomVibrationByName(String name) async {
+    if (!isConnected) return false;
+    final preset = CustomVibration.resolvePreset(name);
+    if (preset != null) {
+      return engine.playVibrationSequence(preset);
+    }
+    final match = customVibrations.cast<CustomVibration?>().firstWhere(
+      (v) => v?.name.trim().toLowerCase() == name.trim().toLowerCase(),
+      orElse: () => null,
+    );
+    if (match != null) {
+      return engine.playVibrationSequence(match.steps);
+    }
+    return false;
   }
 
   /// The UI's "Cancel-all": DISABLE_ALARM on the band, and clear the whole

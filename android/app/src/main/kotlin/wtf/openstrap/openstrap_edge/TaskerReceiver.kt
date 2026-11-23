@@ -14,7 +14,15 @@ class TaskerReceiver : BroadcastReceiver() {
         val action = intent.action
         Log.i(TAG, "onReceive: action=$action")
         val pkg = context.packageName
-        val isBuzzAction = action == ACTION_BUZZ_STRAP ||
+        val isStopAction = action == ACTION_BUZZ_STOP ||
+                action == "$pkg.BUZZ_STOP" ||
+                action == "$pkg.STOP_BUZZ"
+        val isStartLoopAction = action == ACTION_BUZZ_START_LOOP ||
+                action == "$pkg.BUZZ_START_LOOP" ||
+                action == "$pkg.BUZZ_LOOP"
+        val isBuzzAction = isStopAction ||
+                isStartLoopAction ||
+                action == ACTION_BUZZ_STRAP ||
                 action == "$pkg.BUZZ_STRAP" ||
                 action == "$pkg.BUZZ_CUSTOM" ||
                 action == "$pkg.BUZZ_SINGLE" ||
@@ -53,12 +61,37 @@ class TaskerReceiver : BroadcastReceiver() {
             return
         }
 
+        // STOP action: immediate cancellation with NO rate limit
+        if (isStopAction) {
+            Log.i(TAG, "handling BUZZ_STOP: cancelling active vibration loop")
+            val prefs = context.getSharedPreferences("openstrap_runtime", Context.MODE_PRIVATE)
+            prefs.edit()
+                .putBoolean(PENDING_LOOP_KEY, false)
+                .remove(PENDING_LOOP_KEY)
+                .remove(PENDING_LOOP_INTERVAL_KEY)
+                .remove(PENDING_TIMEOUT_KEY)
+                .commit()
+
+            val engine = FlutterEngineCache.getInstance().get(EdgeApplication.ENGINE_ID)
+            if (engine != null) {
+                MethodChannel(
+                    engine.dartExecutor.binaryMessenger,
+                    NativeChannels.TASKER_CHANNEL
+                ).invokeMethod("stop_buzz_loop", null)
+            }
+            return
+        }
+
         val nowElapsed = SystemClock.elapsedRealtime()
         if (nowElapsed - lastAcceptedElapsedMs < MIN_INTERVAL_MS) {
             Log.w(TAG, "rejected: rate-limited (< ${MIN_INTERVAL_MS}ms since last accepted broadcast)")
             return
         }
         lastAcceptedElapsedMs = nowElapsed
+
+        val isLoop = isStartLoopAction || intent.getBooleanExtra(EXTRA_LOOP, false)
+        val loopIntervalMs = intent.getIntExtra(EXTRA_LOOP_INTERVAL_MS, 1500).coerceIn(500, 30000)
+        val timeoutSec = intent.getIntExtra(EXTRA_TIMEOUT_SEC, 90).coerceIn(5, 600)
 
         var patternName: String? = intent.getStringExtra(EXTRA_NAME)
         if (patternName == null) {
@@ -85,7 +118,7 @@ class TaskerReceiver : BroadcastReceiver() {
         val sequence = intent.getStringExtra(EXTRA_SEQUENCE)
         val count = intent.getIntExtra(EXTRA_COUNT, 1).coerceIn(1, 10)
         val delayMs = intent.getIntExtra(EXTRA_DELAY_MS, 350).coerceIn(50, 3000)
-        Log.i(TAG, "pattern=$pattern, name=$patternName, seq=$sequence, count=$count, delayMs=$delayMs")
+        Log.i(TAG, "pattern=$pattern, name=$patternName, seq=$sequence, count=$count, delayMs=$delayMs, loop=$isLoop, interval=$loopIntervalMs, timeout=$timeoutSec")
 
         // Persist first, on both paths. A cached engine is no promise of
         // delivery: a just-created engine may not have registered the Dart
@@ -102,6 +135,9 @@ class TaskerReceiver : BroadcastReceiver() {
             .putInt(PENDING_PATTERN_KEY, pattern)
             .putInt(PENDING_COUNT_KEY, count)
             .putInt(PENDING_DELAY_KEY, delayMs)
+            .putBoolean(PENDING_LOOP_KEY, isLoop)
+            .putInt(PENDING_LOOP_INTERVAL_KEY, loopIntervalMs)
+            .putInt(PENDING_TIMEOUT_KEY, timeoutSec)
             .putLong(PENDING_AT_KEY, System.currentTimeMillis())
 
         if (patternName != null) {
@@ -138,18 +174,29 @@ class TaskerReceiver : BroadcastReceiver() {
         const val TAG = "TaskerReceiver"
         const val ACTION_BUZZ_STRAP =
             "wtf.openstrap.openstrap_edge.BUZZ_STRAP"
+        const val ACTION_BUZZ_START_LOOP =
+            "wtf.openstrap.openstrap_edge.BUZZ_START_LOOP"
+        const val ACTION_BUZZ_STOP =
+            "wtf.openstrap.openstrap_edge.BUZZ_STOP"
         const val EXTRA_PATTERN = "pattern"
         const val EXTRA_NAME = "name"
         const val EXTRA_SEQUENCE = "sequence"
         const val EXTRA_COUNT = "count"
         const val EXTRA_DELAY_MS = "delay_ms"
         const val EXTRA_TOKEN = "token"
+        const val EXTRA_LOOP = "loop"
+        const val EXTRA_LOOP_INTERVAL_MS = "interval_ms"
+        const val EXTRA_TIMEOUT_SEC = "timeout_sec"
+
         const val PENDING_BUZZ_KEY = "pending_tasker_buzz"
         const val PENDING_PATTERN_KEY = "pending_tasker_buzz_pattern"
         const val PENDING_PATTERN_NAME_KEY = "pending_tasker_buzz_pattern_name"
         const val PENDING_SEQUENCE_KEY = "pending_tasker_buzz_sequence"
         const val PENDING_COUNT_KEY = "pending_tasker_buzz_count"
         const val PENDING_DELAY_KEY = "pending_tasker_buzz_delay_ms"
+        const val PENDING_LOOP_KEY = "pending_tasker_buzz_loop"
+        const val PENDING_LOOP_INTERVAL_KEY = "pending_tasker_buzz_loop_interval_ms"
+        const val PENDING_TIMEOUT_KEY = "pending_tasker_buzz_timeout_sec"
         const val PENDING_AT_KEY = "pending_tasker_buzz_at_ms"
         const val DEFAULT_PATTERN = 2
         private const val MIN_INTERVAL_MS = 1500L

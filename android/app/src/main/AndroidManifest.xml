@@ -252,6 +252,10 @@
                 <action android:name="${applicationId}.BUZZ_TRIPLE" />
                 <action android:name="${applicationId}.BUZZ_ALARM" />
                 <action android:name="${applicationId}.BUZZ_SOS" />
+                <action android:name="${applicationId}.BUZZ_START_LOOP" />
+                <action android:name="${applicationId}.BUZZ_LOOP" />
+                <action android:name="${applicationId}.BUZZ_STOP" />
+                <action android:name="${applicationId}.STOP_BUZZ" />
                 <action android:name="wtf.openstrap.openstrap_edge.BUZZ_STRAP" />
             </intent-filter>
         </receiver>

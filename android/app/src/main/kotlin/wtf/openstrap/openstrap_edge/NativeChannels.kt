@@ -263,6 +263,9 @@ object NativeChannels {
                             args["sequence"] = prefs.getString(TaskerReceiver.PENDING_SEQUENCE_KEY, null)
                             args["count"] = prefs.getInt(TaskerReceiver.PENDING_COUNT_KEY, 1)
                             args["delayMs"] = prefs.getInt(TaskerReceiver.PENDING_DELAY_KEY, 350)
+                            args["loop"] = prefs.getBoolean(TaskerReceiver.PENDING_LOOP_KEY, false)
+                            args["loopIntervalMs"] = prefs.getInt(TaskerReceiver.PENDING_LOOP_INTERVAL_KEY, 1500)
+                            args["timeoutSec"] = prefs.getInt(TaskerReceiver.PENDING_TIMEOUT_KEY, 90)
                             // Absent on a flag queued by an older build; Dart
                             // treats that as stale rather than guessing an age.
                             args["requestedAtMs"] =
@@ -289,6 +292,9 @@ object NativeChannels {
                             .remove(TaskerReceiver.PENDING_SEQUENCE_KEY)
                             .remove(TaskerReceiver.PENDING_COUNT_KEY)
                             .remove(TaskerReceiver.PENDING_DELAY_KEY)
+                            .remove(TaskerReceiver.PENDING_LOOP_KEY)
+                            .remove(TaskerReceiver.PENDING_LOOP_INTERVAL_KEY)
+                            .remove(TaskerReceiver.PENDING_TIMEOUT_KEY)
                             .remove(TaskerReceiver.PENDING_AT_KEY)
                             .apply()
                         result.success(null)

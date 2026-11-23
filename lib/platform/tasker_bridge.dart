@@ -10,6 +10,9 @@ class PendingTaskerBuzz {
   final String? sequence;
   final int count;
   final int delayMs;
+  final bool loop;
+  final int loopIntervalMs;
+  final int timeoutSec;
 
   /// Wall-clock ms when the broadcast arrived; null for a flag queued by a
   /// build that did not record it.
@@ -21,6 +24,9 @@ class PendingTaskerBuzz {
     this.sequence,
     this.count = 1,
     this.delayMs = 350,
+    this.loop = false,
+    this.loopIntervalMs = 1500,
+    this.timeoutSec = 90,
     this.requestedAtMs,
   });
 
@@ -38,12 +44,18 @@ class PendingTaskerBuzz {
     final seq = raw['sequence'] as String?;
     final count = (raw['count'] as num?)?.toInt() ?? 1;
     final delayMs = (raw['delayMs'] as num?)?.toInt() ?? 350;
+    final loop = raw['loop'] as bool? ?? false;
+    final loopIntervalMs = (raw['loopIntervalMs'] as num?)?.toInt() ?? 1500;
+    final timeoutSec = (raw['timeoutSec'] as num?)?.toInt() ?? 90;
     return PendingTaskerBuzz(
       pattern: pattern,
       patternName: name,
       sequence: seq,
       count: count.clamp(1, 10),
       delayMs: delayMs.clamp(50, 3000),
+      loop: loop,
+      loopIntervalMs: loopIntervalMs.clamp(500, 30000),
+      timeoutSec: timeoutSec.clamp(5, 600),
       requestedAtMs: at is int ? at : null,
     );
   }
@@ -67,7 +79,10 @@ class TaskerBridge {
   /// cleared only once the strap actually got the buzz.
   final Future<void> Function() deliverPending;
 
-  TaskerBridge({required this.deliverPending}) {
+  /// Optional callback to stop any active continuous vibration loop immediately.
+  final VoidCallback? onStopLoop;
+
+  TaskerBridge({required this.deliverPending, this.onStopLoop}) {
     _ch.setMethodCallHandler(_onMethodCall);
   }
 
@@ -77,6 +92,12 @@ class TaskerBridge {
         await deliverPending();
       } catch (e, st) {
         debugPrint('[tasker] buzz failed: $e\n$st');
+      }
+    } else if (call.method == 'stop_buzz_loop') {
+      try {
+        onStopLoop?.call();
+      } catch (e, st) {
+        debugPrint('[tasker] stop buzz loop failed: $e\n$st');
       }
     }
   }

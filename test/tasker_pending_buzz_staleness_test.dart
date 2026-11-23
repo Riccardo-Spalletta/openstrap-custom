@@ -75,13 +75,16 @@ void main() {
     expect(delivered, 1);
   });
 
-  test('custom vibration extras are parsed correctly', () async {
+  test('custom vibration extras and loop flags are parsed correctly', () async {
     mockPeek({
       'pattern': 0,
       'patternName': 'banca',
       'sequence': '0,200,2',
       'count': 3,
       'delayMs': 400,
+      'loop': true,
+      'loopIntervalMs': 2000,
+      'timeoutSec': 120,
       'requestedAtMs': now.millisecondsSinceEpoch - 1000,
     });
     final p = await TaskerBridge.peekPendingBuzz();
@@ -90,6 +93,24 @@ void main() {
     expect(p.sequence, '0,200,2');
     expect(p.count, 3);
     expect(p.delayMs, 400);
+    expect(p.loop, isTrue);
+    expect(p.loopIntervalMs, 2000);
+    expect(p.timeoutSec, 120);
     expect(p.isFresh(now), isTrue);
+  });
+
+  test('stop_buzz_loop platform message invokes onStopLoop callback', () async {
+    var stopped = 0;
+    TaskerBridge(
+      deliverPending: () async {},
+      onStopLoop: () => stopped++,
+    );
+    await TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .handlePlatformMessage(
+      ch.name,
+      ch.codec.encodeMethodCall(const MethodCall('stop_buzz_loop')),
+      (_) {},
+    );
+    expect(stopped, 1);
   });
 }

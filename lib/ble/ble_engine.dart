@@ -9073,13 +9073,26 @@ class BleEngine {
   Future<bool> buzzPatternDelivered(int pattern) => _sendBuzz(pattern);
 
   /// Play an arbitrary multi-step sequence of vibration pulses and pauses.
-  Future<bool> playVibrationSequence(List<VibrationStep> steps) async {
+  /// Waits for the strap's physical motor waveform to finish before executing
+  /// subsequent steps so the WHOOP firmware does not drop trailing commands.
+  Future<bool> playVibrationSequence(
+    List<VibrationStep> steps, {
+    void Function(int index)? onStepStarted,
+    bool Function()? shouldAbort,
+  }) async {
     if (steps.isEmpty) return false;
     bool anyDelivered = false;
     for (var i = 0; i < steps.length; i++) {
+      if (shouldAbort?.call() == true) break;
+      onStepStarted?.call(i);
       final step = steps[i];
       if (step.type == VibrationStepType.pause) {
-        await Future.delayed(Duration(milliseconds: step.durationMs.clamp(50, 3000)));
+        final ms = step.durationMs.clamp(50, 5000);
+        final chunks = (ms / 50).ceil();
+        for (var c = 0; c < chunks; c++) {
+          if (shouldAbort?.call() == true) break;
+          await Future.delayed(const Duration(milliseconds: 50));
+        }
       } else {
         final pattern = switch (step.type) {
           VibrationStepType.single => 0,
@@ -9089,8 +9102,32 @@ class BleEngine {
         };
         final ok = await buzzPatternDelivered(pattern);
         if (ok) anyDelivered = true;
+
+        // Physical waveform duration on WHOOP motor:
+        // - Single pulse (pattern 0): ~450ms
+        // - Double tap (pattern 2): ~950ms
+        // - Alarm pulse (pattern 1): ~2000ms
+        final waveformMs = switch (step.type) {
+          VibrationStepType.single => 450,
+          VibrationStepType.doubleTap => 950,
+          VibrationStepType.alarm => 2000,
+          VibrationStepType.pause => 0,
+        };
+        final waveChunks = (waveformMs / 50).ceil();
+        for (var c = 0; c < waveChunks; c++) {
+          if (shouldAbort?.call() == true) break;
+          await Future.delayed(const Duration(milliseconds: 50));
+        }
+
+        // If the immediate next step is another buzz (not a pause), insert a brief gap
+        // so consecutive buzzes do not blend together into one continuous vibration.
         if (i < steps.length - 1 && steps[i + 1].type != VibrationStepType.pause) {
-          await Future.delayed(const Duration(milliseconds: 250));
+          const gapMs = 200;
+          final gapChunks = (gapMs / 50).ceil();
+          for (var c = 0; c < gapChunks; c++) {
+            if (shouldAbort?.call() == true) break;
+            await Future.delayed(const Duration(milliseconds: 50));
+          }
         }
       }
     }

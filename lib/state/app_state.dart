@@ -425,6 +425,7 @@ class AppState extends ChangeNotifier {
   /// Tasker and buzzes the strap. Wired in the constructor.
   late final TaskerBridge taskerBridge = TaskerBridge(
     deliverPending: _checkPendingTaskerBuzz,
+    onStopLoop: stopBuzzLoop,
   );
   Sample? lastSynced;
   // REAL device time (epoch SECONDS) of the newest record we hold — the band's
@@ -3512,9 +3513,41 @@ class AppState extends ChangeNotifier {
         await TaskerBridge.clearPendingBuzz(requestedAtMs: latest.requestedAtMs);
         return;
       }
-      _log('[tasker] consuming pending buzz (pattern=${latest.pattern}, name=${latest.patternName}, seq=${latest.sequence}, count=${latest.count})');
+      _log('[tasker] consuming pending buzz (pattern=${latest.pattern}, name=${latest.patternName}, seq=${latest.sequence}, count=${latest.count}, loop=${latest.loop})');
       bool delivered = false;
-      if (latest.sequence != null && latest.sequence!.isNotEmpty) {
+      if (latest.loop) {
+        List<VibrationStep> steps = const [];
+        if (latest.sequence != null && latest.sequence!.isNotEmpty) {
+          steps = CustomVibration.parseSequenceString(latest.sequence!);
+        } else if (latest.patternName != null && latest.patternName!.isNotEmpty) {
+          final preset = CustomVibration.resolvePreset(latest.patternName!);
+          if (preset != null) {
+            steps = preset;
+          } else {
+            final match = customVibrations.cast<CustomVibration?>().firstWhere(
+              (v) => v?.name.trim().toLowerCase() == latest.patternName!.trim().toLowerCase(),
+              orElse: () => null,
+            );
+            if (match != null) steps = match.steps;
+          }
+        }
+        if (steps.isEmpty) {
+          final type = switch (latest.pattern) {
+            0 => VibrationStepType.single,
+            1 => VibrationStepType.alarm,
+            2 => VibrationStepType.doubleTap,
+            _ => VibrationStepType.single,
+          };
+          steps = [VibrationStep(type)];
+        }
+
+        unawaited(startBuzzLoop(
+          steps: steps,
+          interval: Duration(milliseconds: latest.loopIntervalMs),
+          timeout: Duration(seconds: latest.timeoutSec),
+        ));
+        delivered = true;
+      } else if (latest.sequence != null && latest.sequence!.isNotEmpty) {
         final steps = CustomVibration.parseSequenceString(latest.sequence!);
         delivered = await engine.playVibrationSequence(steps);
       } else if (latest.patternName != null && latest.patternName!.isNotEmpty) {
@@ -6317,6 +6350,65 @@ class AppState extends ChangeNotifier {
       return engine.playVibrationSequence(match.steps);
     }
     return false;
+  }
+
+  int _activeBuzzLoopId = 0;
+
+  /// Whether a continuous vibration loop is actively running.
+  bool get isBuzzLoopActive => _activeBuzzLoopId != 0;
+
+  /// Stop any running continuous vibration loop immediately.
+  void stopBuzzLoop() {
+    if (_activeBuzzLoopId != 0) {
+      _log('[haptics] stopping active vibration loop (id=$_activeBuzzLoopId)');
+      _activeBuzzLoopId = 0;
+      notifyListeners();
+    }
+  }
+
+  /// Start repeating a vibration sequence in a continuous loop until [stopBuzzLoop]
+  /// is called or [timeout] elapses.
+  Future<void> startBuzzLoop({
+    required List<VibrationStep> steps,
+    Duration interval = const Duration(milliseconds: 1500),
+    Duration timeout = const Duration(seconds: 90),
+  }) async {
+    if (steps.isEmpty || !isConnected) return;
+    final loopId = DateTime.now().millisecondsSinceEpoch;
+    _activeBuzzLoopId = loopId;
+    _log('[haptics] starting continuous vibration loop (id=$loopId, steps=${steps.length}, '
+        'interval=${interval.inMilliseconds}ms, timeout=${timeout.inSeconds}s)');
+    notifyListeners();
+
+    final deadline = timeout > Duration.zero ? DateTime.now().add(timeout) : null;
+
+    try {
+      while (_activeBuzzLoopId == loopId && isConnected) {
+        if (deadline != null && DateTime.now().isAfter(deadline)) {
+          _log('[haptics] vibration loop reached timeout of ${timeout.inSeconds}s — stopping');
+          break;
+        }
+
+        final delivered = await engine.playVibrationSequence(
+          steps,
+          shouldAbort: () => _activeBuzzLoopId != loopId,
+        );
+
+        if (!delivered || _activeBuzzLoopId != loopId) break;
+
+        final ms = interval.inMilliseconds.clamp(500, 30000);
+        final waitChunks = (ms / 50).ceil();
+        for (var c = 0; c < waitChunks; c++) {
+          if (_activeBuzzLoopId != loopId) break;
+          await Future.delayed(const Duration(milliseconds: 50));
+        }
+      }
+    } finally {
+      if (_activeBuzzLoopId == loopId) {
+        _activeBuzzLoopId = 0;
+        notifyListeners();
+      }
+    }
   }
 
   /// The UI's "Cancel-all": DISABLE_ALARM on the band, and clear the whole

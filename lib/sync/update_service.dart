@@ -34,7 +34,7 @@ import '../models/app_status.dart';
 /// lib/cloud/companion_client.dart — the public repo must not bake a specific
 /// distribution channel in by default.
 const bool kSideloadOtaEnabled =
-    bool.fromEnvironment('ENABLE_SIDELOAD_OTA', defaultValue: false);
+    bool.fromEnvironment('ENABLE_SIDELOAD_OTA', defaultValue: true);
 
 /// A coarse progress event the UI renders.
 class OtaProgress {
@@ -55,26 +55,83 @@ class UpdateService {
   /// URL configured, offline, bad JSON) so the caller simply skips the update
   /// prompt / banner.
   static Future<AppStatus?> fetchStatus() async {
-    // Defense in depth, the same shape as HealthUploader.maybeUpload: the
-    // update pointer and the admin banner are the ONLY reasons this endpoint
-    // is ever contacted, and both belong to the sideload OTA feature — so a
-    // build without that feature must not contact it, whatever the caller
-    // believes. It used to fire on every launch and every foreground, gated
-    // on nothing but a non-empty URL, in shipped releases. A GET carries no
-    // health data, but it still hands the operator an IP, a rough location
-    // and a timestamp for every single app open, which is neither disclosed
-    // nor refusable. The per-user off switch is [AppState.updateChecksEnabled].
     if (!kSideloadOtaEnabled) return null;
     final base = CompanionClient.effectiveBase;
-    if (base.isEmpty) return null;
+    if (base.isNotEmpty) {
+      try {
+        final resp = await http
+            .get(Uri.parse('$base/app/status'))
+            .timeout(const Duration(seconds: 12));
+        if (resp.statusCode == 200 && resp.body.isNotEmpty) {
+          final decoded = jsonDecode(resp.body);
+          if (decoded is Map) {
+            return AppStatus.fromJson(decoded.cast<String, dynamic>());
+          }
+        }
+      } catch (_) {}
+    }
+
+    // Direct GitHub Releases OTA check for Poohw
     try {
-      final resp = await http
-          .get(Uri.parse('$base/app/status'))
-          .timeout(const Duration(seconds: 12));
+      final resp = await http.get(
+        Uri.parse('https://api.github.com/repos/Riccardo-Spalletta/openstrap-custom/releases/latest'),
+        headers: const {
+          'Accept': 'application/vnd.github.v3+json',
+          'User-Agent': 'Poohw-Update-Service',
+        },
+      ).timeout(const Duration(seconds: 12));
       if (resp.statusCode != 200 || resp.body.isEmpty) return null;
-      final decoded = jsonDecode(resp.body);
-      if (decoded is! Map) return null;
-      return AppStatus.fromJson(decoded.cast<String, dynamic>());
+      final data = jsonDecode(resp.body);
+      if (data is! Map) return null;
+
+      final tag = (data['tag_name'] as String?) ?? '';
+      final name = (data['name'] as String?) ?? tag;
+      final body = (data['body'] as String?) ?? '';
+      final assets = (data['assets'] as List?) ?? [];
+
+      String? apkUrl;
+      for (final a in assets) {
+        if (a is Map) {
+          final aName = (a['name'] as String?) ?? '';
+          if (aName.endsWith('.apk')) {
+            apkUrl = a['browser_download_url'] as String?;
+            break;
+          }
+        }
+      }
+      if (apkUrl == null) return null;
+
+      // Parse build number from tag (e.g. v0.12.2+82) or body or semver
+      int? buildNum;
+      final plusIdx = tag.indexOf('+');
+      if (plusIdx != -1) {
+        buildNum = int.tryParse(tag.substring(plusIdx + 1).split(RegExp(r'[^0-9]')).first);
+      }
+      if (buildNum == null) {
+        final match = RegExp(r'build[:\s]+(\d+)', caseSensitive: false).firstMatch(body);
+        if (match != null) {
+          buildNum = int.tryParse(match.group(1)!);
+        }
+      }
+      if (buildNum == null) {
+        final match = RegExp(r'v?(\d+)\.(\d+)\.(\d+)').firstMatch(tag);
+        if (match != null) {
+          final maj = int.parse(match.group(1)!);
+          final min = int.parse(match.group(2)!);
+          final pat = int.parse(match.group(3)!);
+          buildNum = maj * 10000 + min * 100 + pat;
+        }
+      }
+      if (buildNum == null) return null;
+
+      return AppStatus(
+        update: UpdateInfo(
+          latestVersion: name.isNotEmpty ? name : tag,
+          latestBuild: buildNum,
+          apkUrl: apkUrl,
+          notes: body,
+        ),
+      );
     } catch (_) {
       return null;
     }
@@ -90,7 +147,7 @@ class UpdateService {
       return Stream.value(const OtaProgress('error', message: 'OTA is Android-only'));
     }
     return OtaUpdate()
-        .execute(apkUrl, destinationFilename: 'openstrap-update.apk')
+        .execute(apkUrl, destinationFilename: 'poohw-update.apk')
         .map((e) {
       switch (e.status) {
         case OtaStatus.DOWNLOADING:

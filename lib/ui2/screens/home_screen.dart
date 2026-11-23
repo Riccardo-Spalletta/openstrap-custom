@@ -30,6 +30,7 @@ import '../../l10n/date_text.dart';
 import 'dart:async';
 import 'dart:ui' as ui show TextDirection;
 
+import '../../sync/update_service.dart' show UpdateService, OtaProgress;
 import 'package:clock/clock.dart' as pc;
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -2565,6 +2566,10 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
       // When viewing today, live heart rate sits prominently as the very first card on Home.
       // Tapping it opens the detailed heart rate chart and metrics (MetricDetail).
       if (isToday) ...[
+        if (c.select<AppState, bool>((a) => a.updateAvailable)) ...[
+          const SizedBox(height: S.x3),
+          const _PoohwUpdateCard(),
+        ],
         const SizedBox(height: S.x3),
         LiveHrCard(
           onTap: () => go(c, const MetricDetail('resting_hr')),
@@ -3216,4 +3221,178 @@ Widget coachChip(BuildContext c) {
       ),
     ),
   );
+}
+
+/// In-app notification card that appears when a new Poohw version is available on GitHub Releases.
+/// Offers one-tap direct sideload update via [UpdateService.install] with progress reporting,
+/// and fallback to browser.
+class _PoohwUpdateCard extends StatefulWidget {
+  const _PoohwUpdateCard();
+
+  @override
+  State<_PoohwUpdateCard> createState() => _PoohwUpdateCardState();
+}
+
+class _PoohwUpdateCardState extends State<_PoohwUpdateCard> {
+  StreamSubscription<OtaProgress>? _sub;
+  int? _percent;
+  bool _installing = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _sub?.cancel();
+    super.dispose();
+  }
+
+  void _startUpdate(String apkUrl) {
+    setState(() {
+      _percent = 0;
+      _installing = false;
+      _error = null;
+    });
+
+    _sub?.cancel();
+    _sub = UpdateService.install(apkUrl).listen(
+      (progress) {
+        if (!mounted) return;
+        if (progress.status == 'downloading') {
+          setState(() {
+            _percent = progress.percent;
+          });
+        } else if (progress.status == 'installing') {
+          setState(() {
+            _installing = true;
+            _percent = 100;
+          });
+        } else if (progress.status == 'error') {
+          setState(() {
+            _error = progress.message ?? 'Errore download';
+            _percent = null;
+          });
+          UpdateService.openInBrowser(apkUrl);
+        }
+      },
+      onError: (err) {
+        if (!mounted) return;
+        setState(() {
+          _error = err.toString();
+          _percent = null;
+        });
+        UpdateService.openInBrowser(apkUrl);
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext c) {
+    final p = P.of(c);
+    final app = c.watch<AppState>();
+    final update = app.appStatus?.update;
+    if (update == null || !app.updateAvailable) return const SizedBox.shrink();
+
+    return Surface(
+      pad: const EdgeInsets.all(S.x4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(S.x2),
+                decoration: BoxDecoration(
+                  color: p.wash(C.crimson),
+                  borderRadius: R.rSm,
+                ),
+                child: const Icon(LucideIcons.sparkles, size: 18, color: C.crimson),
+              ),
+              const SizedBox(width: S.x3),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Aggiornamento Poohw disponibile',
+                      style: F.head.copyWith(color: p.ink, fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: S.x1),
+                    Text(
+                      update.latestVersion.isNotEmpty ? update.latestVersion : 'Nuova versione rilasciata',
+                      style: F.cap.copyWith(color: p.ink2),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          if (_error != null) ...[
+            const SizedBox(height: S.x2),
+            Text(
+              _error!,
+              style: F.cap.copyWith(color: C.crimson),
+            ),
+          ],
+          const SizedBox(height: S.x3),
+          if (_percent != null) ...[
+            Row(
+              children: [
+                Expanded(
+                  child: ClipRRect(
+                    borderRadius: R.rSm,
+                    child: LinearProgressIndicator(
+                      value: (_percent! / 100.0).clamp(0.0, 1.0),
+                      backgroundColor: p.track,
+                      valueColor: const AlwaysStoppedAnimation<Color>(C.crimson),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: S.x2),
+                Text(
+                  _installing ? 'Installazione...' : '$_percent%',
+                  style: F.cap.copyWith(color: C.silverBright),
+                ),
+              ],
+            ),
+          ] else ...[
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                Pressable(
+                  onTap: () => UpdateService.openInBrowser(update.apkUrl),
+                  semanticLabel: 'GitHub',
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: S.x3, vertical: S.x2),
+                    decoration: BoxDecoration(
+                      color: p.card2,
+                      borderRadius: R.rPill,
+                    ),
+                    child: Text(
+                      'GitHub',
+                      style: F.cap.copyWith(color: p.ink2),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: S.x2),
+                Pressable(
+                  onTap: () => _startUpdate(update.apkUrl),
+                  semanticLabel: 'Aggiorna ora',
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: S.x4, vertical: S.x2),
+                    decoration: BoxDecoration(
+                      color: p.fill(C.crimson),
+                      borderRadius: R.rPill,
+                    ),
+                    child: Text(
+                      'Aggiorna ora',
+                      style: F.cap.copyWith(color: p.inkOnFill, fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
 }

@@ -1986,6 +1986,8 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  int get currentBuild => _currentBuild;
+
   /// Re-poll the update pointer (best-effort; called on launch and on app resume).
   Future<void> refreshAppStatus() async {
     if (!updateChecksEnabled) return;
@@ -1994,6 +1996,16 @@ class AppState extends ChangeNotifier {
     if (status == null || gen != _appStatusGen || !updateChecksEnabled) return;
     appStatus = status;
     notifyListeners();
+  }
+
+  /// Explicitly check for updates now (e.g. from Settings button).
+  Future<AppStatus?> checkForUpdatesNow() async {
+    final status = await UpdateService.fetchStatus();
+    if (status != null) {
+      appStatus = status;
+      notifyListeners();
+    }
+    return status;
   }
 
 

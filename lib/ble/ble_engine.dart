@@ -9087,18 +9087,55 @@ class BleEngine {
       onStepStarted?.call(i);
       final step = steps[i];
       if (step.type == VibrationStepType.pause) {
-        final ms = step.durationMs.clamp(50, 5000);
+        final ms = step.durationMs.clamp(50, 10000);
         final chunks = (ms / 50).ceil();
         for (var c = 0; c < chunks; c++) {
           if (shouldAbort?.call() == true) break;
           await Future.delayed(const Duration(milliseconds: 50));
+        }
+      } else if (step.type == VibrationStepType.vibrate) {
+        final targetMs = step.durationMs.clamp(50, 10000);
+        if (targetMs <= 450) {
+          final ok = await buzzPatternDelivered(0);
+          if (ok) anyDelivered = true;
+          final waitMs = targetMs < 400 ? 400 : targetMs;
+          final chunks = (waitMs / 50).ceil();
+          for (var c = 0; c < chunks; c++) {
+            if (shouldAbort?.call() == true) break;
+            await Future.delayed(const Duration(milliseconds: 50));
+          }
+        } else {
+          var elapsed = 0;
+          while (elapsed < targetMs) {
+            if (shouldAbort?.call() == true) break;
+            final ok = await buzzPatternDelivered(0);
+            if (ok) anyDelivered = true;
+            final pulseWindow = (targetMs - elapsed).clamp(50, 400);
+            final chunks = (pulseWindow / 50).ceil();
+            for (var c = 0; c < chunks; c++) {
+              if (shouldAbort?.call() == true) break;
+              await Future.delayed(const Duration(milliseconds: 50));
+            }
+            elapsed += pulseWindow;
+          }
+        }
+
+        // If the immediate next step is another buzz (not a pause), insert a brief gap
+        // so consecutive buzzes do not blend together into one continuous vibration.
+        if (i < steps.length - 1 && steps[i + 1].type != VibrationStepType.pause) {
+          const gapMs = 150;
+          final gapChunks = (gapMs / 50).ceil();
+          for (var c = 0; c < gapChunks; c++) {
+            if (shouldAbort?.call() == true) break;
+            await Future.delayed(const Duration(milliseconds: 50));
+          }
         }
       } else {
         final pattern = switch (step.type) {
           VibrationStepType.single => 0,
           VibrationStepType.doubleTap => 2,
           VibrationStepType.alarm => 1,
-          VibrationStepType.pause => 0,
+          _ => 0,
         };
         final ok = await buzzPatternDelivered(pattern);
         if (ok) anyDelivered = true;
@@ -9111,7 +9148,7 @@ class BleEngine {
           VibrationStepType.single => 450,
           VibrationStepType.doubleTap => 950,
           VibrationStepType.alarm => 2000,
-          VibrationStepType.pause => 0,
+          _ => 450,
         };
         final waveChunks = (waveformMs / 50).ceil();
         for (var c = 0; c < waveChunks; c++) {
@@ -9122,7 +9159,7 @@ class BleEngine {
         // If the immediate next step is another buzz (not a pause), insert a brief gap
         // so consecutive buzzes do not blend together into one continuous vibration.
         if (i < steps.length - 1 && steps[i + 1].type != VibrationStepType.pause) {
-          const gapMs = 200;
+          const gapMs = 150;
           final gapChunks = (gapMs / 50).ceil();
           for (var c = 0; c < gapChunks; c++) {
             if (shouldAbort?.call() == true) break;

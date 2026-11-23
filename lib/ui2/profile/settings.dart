@@ -12,6 +12,8 @@ import 'step_calibration.dart';
 //     form. None of them feed a metric, and a field that changes nothing is a
 //     field that implies an account.
 
+import 'dart:async';
+
 import 'package:flutter/foundation.dart' show defaultTargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
@@ -27,6 +29,7 @@ import '../../health/health_export.dart' show HealthLinkState;
 import '../../health/health_import_state.dart';
 import '../../health/health_profile_import.dart';
 import '../../l10n/app_localizations.dart';
+import '../../models/app_status.dart';
 import '../../platform/tasker_bridge.dart';
 import '../../notify/notification_prefs.dart';
 import '../../notify/notification_service.dart';
@@ -35,6 +38,7 @@ import '../../state/app_state.dart';
 import '../../state/clock_format.dart';
 import '../../state/prefs.dart';
 import '../../state/units_controller.dart';
+import '../../sync/update_service.dart';
 import '../../telemetry/health_uploader.dart';
 import '../../theme/theme_controller.dart';
 import '../ui2.dart';
@@ -92,6 +96,11 @@ class _MoreSettingsState extends State<MoreSettings>
   /// answers and always null elsewhere, which keeps the row off iOS.
   bool? _bgExempt;
   bool _oemAutostart = false;
+  bool _checkingUpdate = false;
+  StreamSubscription<OtaProgress>? _otaSub;
+  int? _otaPercent;
+  bool _otaInstalling = false;
+  String? _otaError;
 
   @override
   void initState() {
@@ -110,8 +119,228 @@ class _MoreSettingsState extends State<MoreSettings>
 
   @override
   void dispose() {
+    _otaSub?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
+  }
+
+  Future<void> _checkForUpdates(AppState app) async {
+    if (_checkingUpdate) return;
+    setState(() {
+      _checkingUpdate = true;
+      _otaError = null;
+    });
+
+    try {
+      final status = await app.checkForUpdatesNow();
+      if (!mounted) return;
+
+      final update = status?.update;
+      if (update != null && update.latestBuild > app.currentBuild && update.apkUrl != null) {
+        _showUpdateDialog(app, update);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              _version.isNotEmpty
+                  ? 'Poohw è già aggiornata all\'ultima versione ($_version)!'
+                  : 'Nessun aggiornamento disponibile: hai l\'ultima versione!',
+            ),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Errore durante la verifica: $e'),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _checkingUpdate = false);
+      }
+    }
+  }
+
+  void _showUpdateDialog(AppState app, UpdateInfo update) {
+    final p = P.of(context);
+    final apkUrl = update.apkUrl!;
+    final versionStr = update.latestVersion?.isNotEmpty == true
+        ? update.latestVersion!
+        : 'Build ${update.latestBuild}';
+
+    showDialog(
+      context: context,
+      barrierDismissible: !_otaInstalling,
+      builder: (ctx) => StatefulBuilder(
+        builder: (c, setDialogState) {
+          return AlertDialog(
+            backgroundColor: p.card,
+            shape: RoundedRectangleBorder(borderRadius: R.rMd),
+            title: Row(
+              children: [
+                const Icon(LucideIcons.sparkles, size: 20, color: C.crimson),
+                const SizedBox(width: S.x2),
+                Expanded(
+                  child: Text(
+                    'Aggiornamento disponibile',
+                    style: F.head.copyWith(color: p.ink),
+                  ),
+                ),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: S.x3, vertical: S.x2),
+                  decoration: BoxDecoration(
+                    color: p.wash(C.crimson),
+                    borderRadius: R.rSm,
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(LucideIcons.arrowUpCircle, size: 16, color: C.crimson),
+                      const SizedBox(width: S.x2),
+                      Expanded(
+                        child: Text(
+                          versionStr,
+                          style: F.cap.copyWith(color: C.crimson, fontWeight: FontWeight.w700),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (update.notes != null && update.notes!.isNotEmpty) ...[
+                  const SizedBox(height: S.x3),
+                  Text(
+                    'Novità della versione:',
+                    style: F.cap.copyWith(color: p.ink2, fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: S.x1),
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxHeight: 180),
+                    child: SingleChildScrollView(
+                      child: Container(
+                        padding: const EdgeInsets.all(S.x2),
+                        decoration: BoxDecoration(
+                          color: p.card2,
+                          borderRadius: R.rSm,
+                        ),
+                        child: Text(
+                          update.notes!,
+                          style: F.over.copyWith(color: p.ink, height: 1.4),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+                if (_otaError != null) ...[
+                  const SizedBox(height: S.x2),
+                  Text(_otaError!, style: F.cap.copyWith(color: C.crimson)),
+                ],
+                if (_otaPercent != null) ...[
+                  const SizedBox(height: S.x3),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: ClipRRect(
+                          borderRadius: R.rSm,
+                          child: LinearProgressIndicator(
+                            value: (_otaPercent! / 100.0).clamp(0.0, 1.0),
+                            backgroundColor: p.track,
+                            valueColor: const AlwaysStoppedAnimation<Color>(C.crimson),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: S.x2),
+                      Text(
+                        _otaInstalling ? 'Installazione...' : '$_otaPercent%',
+                        style: F.cap.copyWith(color: C.silverBright),
+                      ),
+                    ],
+                  ),
+                ],
+              ],
+            ),
+            actions: [
+              if (!_otaInstalling)
+                TextButton(
+                  onPressed: () {
+                    Navigator.of(ctx).pop();
+                    UpdateService.openInBrowser(apkUrl);
+                  },
+                  child: Text('GitHub', style: F.cap.copyWith(color: p.ink2)),
+                ),
+              if (!_otaInstalling)
+                TextButton(
+                  onPressed: () => Navigator.of(ctx).pop(),
+                  child: Text('Più tardi', style: F.cap.copyWith(color: p.ink3)),
+                ),
+              if (_otaPercent == null)
+                Pressable(
+                  onTap: () {
+                    setDialogState(() {
+                      _otaPercent = 0;
+                      _otaInstalling = false;
+                      _otaError = null;
+                    });
+                    _startOtaDownload(apkUrl, setDialogState);
+                  },
+                  semanticLabel: 'Aggiorna Ora',
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: S.x4, vertical: S.x2),
+                    decoration: BoxDecoration(
+                      color: C.crimson,
+                      borderRadius: R.rPill,
+                    ),
+                    child: Text(
+                      'Aggiorna Ora',
+                      style: F.cap.copyWith(color: Colors.white, fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  void _startOtaDownload(String apkUrl, void Function(void Function()) setDialogState) {
+    _otaSub?.cancel();
+    _otaSub = UpdateService.install(apkUrl).listen(
+      (progress) {
+        if (!mounted) return;
+        setDialogState(() {
+          if (progress.phase == 'downloading') {
+            _otaPercent = progress.percent;
+            _otaInstalling = false;
+          } else if (progress.phase == 'installing') {
+            _otaPercent = 100;
+            _otaInstalling = true;
+          } else if (progress.phase == 'error') {
+            _otaError = progress.message ?? 'Errore download';
+            _otaPercent = null;
+            _otaInstalling = false;
+          }
+        });
+      },
+      onError: (err) {
+        if (!mounted) return;
+        setDialogState(() {
+          _otaError = err.toString();
+          _otaPercent = null;
+          _otaInstalling = false;
+        });
+        UpdateService.openInBrowser(apkUrl);
+      },
+    );
   }
 
   /// The exemption dialog and the OEM screen both answer out of band, by the
@@ -240,6 +469,8 @@ class _MoreSettingsState extends State<MoreSettings>
       updateChecks: app.updateChecksEnabled,
       updateAvailable: app.updateAvailable,
       updateMandatory: app.updateMandatory,
+      checkingUpdate: _checkingUpdate,
+      onCheckForUpdates: () => _checkForUpdates(app),
       onEditProfile: () => goto(c, const EditProfile()),
       onAlarm: () => goto(c, const AlarmScreen()),
       onNotifications: () => goto(c, const NotificationSettings()),
@@ -638,7 +869,8 @@ class MoreSettingsView extends StatelessWidget {
   /// a feature: nothing in it is for anyone who has not deliberately asked.
   final bool devMode;
 
-  final VoidCallback? onVersionTap, onToggleDev, onGallery;
+  final VoidCallback? onVersionTap, onToggleDev, onGallery, onCheckForUpdates;
+  final bool checkingUpdate;
 
   final VoidCallback? onEditProfile,
       onAlarm,
@@ -687,11 +919,13 @@ class MoreSettingsView extends StatelessWidget {
     this.updateChecks = true,
     this.updateAvailable = false,
     this.updateMandatory = false,
+    this.checkingUpdate = false,
     this.version = '',
     this.devMode = false,
     this.onVersionTap,
     this.onToggleDev,
     this.onGallery,
+    this.onCheckForUpdates,
     this.onEditProfile,
     this.onAlarm,
     this.onNotifications,
@@ -951,11 +1185,70 @@ class MoreSettingsView extends StatelessWidget {
                 // How a non-WHOOP wearable's numbers are drawn. Developer
                 // only while every wearable is (rule R6).
                 if (devMode) wearableSettingsGroup(c),
+                if (updateAvailable) ...[
+                  Container(
+                    margin: const EdgeInsets.only(bottom: S.x3),
+                    padding: const EdgeInsets.symmetric(horizontal: S.x4, vertical: S.x3),
+                    decoration: BoxDecoration(
+                      color: p.wash(C.crimson),
+                      borderRadius: R.rMd,
+                      border: Border.all(color: C.crimson, width: 1.5),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(LucideIcons.sparkles, size: 20, color: C.crimson),
+                        const SizedBox(width: S.x2),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Aggiornamento Poohw disponibile!',
+                                style: F.cap.copyWith(color: C.crimson, fontWeight: FontWeight.w700),
+                              ),
+                              Text(
+                                'Tocca per installare l\'ultima versione',
+                                style: F.over.copyWith(color: p.ink2),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Pressable(
+                          onTap: onCheckForUpdates,
+                          semanticLabel: 'Aggiorna',
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: S.x3, vertical: S.x2),
+                            decoration: BoxDecoration(
+                              color: C.crimson,
+                              borderRadius: R.rPill,
+                            ),
+                            child: Text(
+                              'AGGIORNA',
+                              style: F.cap.copyWith(color: Colors.white, fontWeight: FontWeight.w700),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
                 settingsGroup(c, l?.settingsGroupAbout ?? 'About', [
                   if (version.isNotEmpty)
                     SetRow(LucideIcons.info, C.n500,
                         l?.settingsVersionRowTitle ?? 'Version',
                         value: version, chevron: false, onTap: onVersionTap),
+                  SetRow(
+                    LucideIcons.arrowUpCircle,
+                    updateAvailable ? C.crimson : C.blue,
+                    'Aggiornamenti dell\'app',
+                    sub: updateAvailable
+                        ? 'Nuova versione Poohw disponibile! Tocca per installarla.'
+                        : 'Verifica la disponibilità di nuove versioni di Poohw',
+                    value: checkingUpdate
+                        ? 'Controllo...'
+                        : (updateAvailable ? 'Aggiorna ora' : 'Cerca aggiornamenti'),
+                    onTap: onCheckForUpdates,
+                  ),
                   // Where the licences of what this app uses are written out
                   // in full. Open Food Facts' ODbL asks for the notice to be
                   // reachable, not only for the credit beside the numbers.

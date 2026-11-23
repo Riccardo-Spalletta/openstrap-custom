@@ -21,10 +21,12 @@ class VibrationEditorScreen extends StatefulWidget {
 class _VibrationEditorScreenState extends State<VibrationEditorScreen> {
   bool _creating = false;
   final TextEditingController _nameCtrl = TextEditingController();
+  int _vibeDurationMs = 300;
+  int _pauseDurationMs = 200;
   final List<VibrationStep> _draftSteps = [
-    const VibrationStep(VibrationStepType.single),
-    const VibrationStep(VibrationStepType.pause, 200),
-    const VibrationStep(VibrationStepType.doubleTap),
+    const VibrationStep.vibrate(300),
+    const VibrationStep.pause(200),
+    const VibrationStep.vibrate(500),
   ];
   bool _playing = false;
   String? _playingId;
@@ -74,6 +76,203 @@ class _VibrationEditorScreenState extends State<VibrationEditorScreen> {
         });
       }
     }
+  }
+
+  void _showEditStepDialog(int index) {
+    if (index < 0 || index >= _draftSteps.length) return;
+    final step = _draftSteps[index];
+    int duration = step.effectiveDurationMs;
+    final isPause = step.isPause;
+    final p = P.of(context);
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (c, setDialogState) {
+          return AlertDialog(
+            backgroundColor: p.card,
+            shape: RoundedRectangleBorder(borderRadius: R.rMd),
+            title: Row(
+              children: [
+                Icon(
+                  isPause ? LucideIcons.pause : LucideIcons.zap,
+                  size: 20,
+                  color: isPause ? p.ink2 : C.crimson,
+                ),
+                const SizedBox(width: S.x2),
+                Text(
+                  isPause ? 'Modifica Pausa' : 'Modifica Vibrazione',
+                  style: F.head.copyWith(color: p.ink),
+                ),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  '$duration ms (${(duration / 1000).toStringAsFixed(2)}s)',
+                  style: F.head.copyWith(
+                    color: isPause ? p.ink : C.crimson,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: S.x3),
+                Slider(
+                  value: duration.toDouble().clamp(50, 5000),
+                  min: 50,
+                  max: 5000,
+                  divisions: 99,
+                  activeColor: isPause ? p.ink2 : C.crimson,
+                  inactiveColor: p.card2,
+                  onChanged: (val) {
+                    setDialogState(() => duration = (val / 50).round() * 50);
+                  },
+                ),
+                const SizedBox(height: S.x1),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    _stepperBtn(p, '-100', () {
+                      setDialogState(() => duration = (duration - 100).clamp(50, 5000));
+                    }),
+                    const SizedBox(width: S.x1),
+                    _stepperBtn(p, '-50', () {
+                      setDialogState(() => duration = (duration - 50).clamp(50, 5000));
+                    }),
+                    const SizedBox(width: S.x2),
+                    _stepperBtn(p, '+50', () {
+                      setDialogState(() => duration = (duration + 50).clamp(50, 5000));
+                    }),
+                    const SizedBox(width: S.x1),
+                    _stepperBtn(p, '+100', () {
+                      setDialogState(() => duration = (duration + 100).clamp(50, 5000));
+                    }),
+                  ],
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.of(ctx).pop();
+                  setState(() => _draftSteps.removeAt(index));
+                },
+                child: Text('Elimina', style: F.cap.copyWith(color: p.ink3)),
+              ),
+              Pressable(
+                onTap: () {
+                  Navigator.of(ctx).pop();
+                  setState(() {
+                    _draftSteps[index] = isPause
+                        ? VibrationStep.pause(duration)
+                        : VibrationStep.vibrate(duration);
+                  });
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: S.x4, vertical: S.x2),
+                  decoration: BoxDecoration(
+                    color: isPause ? p.card2 : C.crimson,
+                    borderRadius: R.rPill,
+                    border: isPause ? Border.all(color: p.line) : null,
+                  ),
+                  child: Text(
+                    'Applica',
+                    style: F.cap.copyWith(
+                      color: isPause ? p.ink : Colors.white,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildRhythmBar(P p, List<VibrationStep> steps, {String? playId}) {
+    if (steps.isEmpty) return const SizedBox.shrink();
+    return Container(
+      height: 16,
+      margin: const EdgeInsets.symmetric(vertical: S.x2),
+      padding: const EdgeInsets.all(2),
+      decoration: BoxDecoration(
+        color: p.card2,
+        borderRadius: R.rSm,
+        border: Border.all(color: p.line, width: 0.8),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(3),
+        child: Row(
+          children: steps.asMap().entries.map((e) {
+            final idx = e.key;
+            final s = e.value;
+            final flex = s.effectiveDurationMs.clamp(50, 5000);
+            final isCurrent = _playing && _playingId == playId && _playingStepIndex == idx;
+            final isPause = s.isPause;
+
+            return Expanded(
+              flex: flex,
+              child: Container(
+                margin: const EdgeInsets.symmetric(horizontal: 1),
+                decoration: BoxDecoration(
+                  color: isCurrent
+                      ? Colors.white
+                      : (isPause ? Colors.transparent : C.crimson),
+                  borderRadius: BorderRadius.circular(2),
+                  border: isPause
+                      ? Border.all(color: p.line.withValues(alpha: 0.5), width: 0.5)
+                      : null,
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      ),
+    );
+  }
+
+  Widget _stepperBtn(P p, String label, VoidCallback onTap) {
+    return Pressable(
+      onTap: onTap,
+      semanticLabel: label,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: S.x2, vertical: 4),
+        decoration: BoxDecoration(
+          color: p.card2,
+          borderRadius: R.rSm,
+          border: Border.all(color: p.line),
+        ),
+        child: Text(
+          label,
+          style: F.cap.copyWith(color: C.silverBright, fontWeight: FontWeight.w600, fontSize: 11),
+        ),
+      ),
+    );
+  }
+
+  Widget _presetPill(P p, String label, bool active, VoidCallback onTap, {Color? color}) {
+    final activeColor = color ?? C.crimson;
+    return Pressable(
+      onTap: onTap,
+      semanticLabel: label,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: S.x2, vertical: 4),
+        decoration: BoxDecoration(
+          color: active ? activeColor : p.card2,
+          borderRadius: R.rPill,
+          border: Border.all(color: active ? activeColor : p.line),
+        ),
+        child: Text(
+          label,
+          style: F.over.copyWith(
+            color: active ? Colors.white : p.ink2,
+            fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+          ),
+        ),
+      ),
+    );
   }
 
   void _copyForMacroDroid(String name, {String? directAction}) {
@@ -203,9 +402,9 @@ Azione: Invia Intent
       _draftSteps
         ..clear()
         ..addAll([
-          const VibrationStep(VibrationStepType.single),
-          const VibrationStep(VibrationStepType.pause, 200),
-          const VibrationStep(VibrationStepType.doubleTap),
+          const VibrationStep.vibrate(300),
+          const VibrationStep.pause(200),
+          const VibrationStep.vibrate(500),
         ]);
     });
   }
@@ -287,7 +486,7 @@ Azione: Invia Intent
                       const Icon(LucideIcons.sparkles, size: 18, color: C.crimson),
                       const SizedBox(width: S.x2),
                       Text(
-                        'Componi nuova vibrazione',
+                        'Componi vibrazione personalizzata',
                         style: F.head.copyWith(color: p.ink, fontWeight: FontWeight.w600),
                       ),
                       const Spacer(),
@@ -314,85 +513,327 @@ Azione: Invia Intent
                     ),
                   ),
                   const SizedBox(height: S.x4),
-                  Text('Sequenza ritmica:', style: F.cap.copyWith(color: p.ink2)),
+                  Row(
+                    children: [
+                      Text('Sequenza ritmica:', style: F.cap.copyWith(color: p.ink2)),
+                      const Spacer(),
+                      Text(
+                        '${_draftSteps.length} step · ${(_draftSteps.fold<int>(0, (sum, s) => sum + s.effectiveDurationMs) / 1000).toStringAsFixed(2)}s totali',
+                        style: F.over.copyWith(color: C.crimson, fontWeight: FontWeight.w600),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: S.x1),
+                  _buildRhythmBar(p, _draftSteps, playId: 'draft'),
                   const SizedBox(height: S.x2),
-                  Wrap(
-                    spacing: S.x2,
-                    runSpacing: S.x2,
-                    children: _draftSteps.asMap().entries.map((e) {
-                      final idx = e.key;
-                      final s = e.value;
-                      final isPause = s.type == VibrationStepType.pause;
-                      final isCurrent = _playing && _playingId == 'draft' && _playingStepIndex == idx;
-                      return Container(
-                        padding: const EdgeInsets.symmetric(horizontal: S.x3, vertical: S.x2),
-                        decoration: BoxDecoration(
-                          color: isCurrent
-                              ? C.crimson
-                              : (isPause ? p.card2 : p.wash(C.crimson)),
-                          borderRadius: R.rPill,
-                          border: Border.all(
-                            color: isCurrent ? C.silverBright : (isPause ? p.line : C.crimson),
-                            width: isCurrent ? 2 : 1,
-                          ),
+                  if (_draftSteps.isEmpty)
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(S.x3),
+                      decoration: BoxDecoration(
+                        color: p.card2,
+                        borderRadius: R.rSm,
+                      ),
+                      child: Center(
+                        child: Text(
+                          'Aggiungi vibrazioni e pause con i selettori di durata qui sotto',
+                          style: F.cap.copyWith(color: p.ink3),
                         ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              s.label,
-                              style: F.cap.copyWith(
-                                color: isCurrent
-                                    ? Colors.white
-                                    : (isPause ? p.ink2 : C.crimson),
-                                fontWeight: FontWeight.w600,
+                      ),
+                    )
+                  else
+                    Wrap(
+                      spacing: S.x2,
+                      runSpacing: S.x2,
+                      children: _draftSteps.asMap().entries.map((e) {
+                        final idx = e.key;
+                        final s = e.value;
+                        final isPause = s.isPause;
+                        final isCurrent = _playing && _playingId == 'draft' && _playingStepIndex == idx;
+                        return Pressable(
+                          onTap: () => _showEditStepDialog(idx),
+                          semanticLabel: 'Modifica ${s.label}',
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: S.x3, vertical: S.x2),
+                            decoration: BoxDecoration(
+                              color: isCurrent
+                                  ? C.crimson
+                                  : (isPause ? p.card2 : p.wash(C.crimson)),
+                              borderRadius: R.rPill,
+                              border: Border.all(
+                                color: isCurrent ? C.silverBright : (isPause ? p.line : C.crimson),
+                                width: isCurrent ? 2 : 1,
                               ),
                             ),
-                            const SizedBox(width: S.x1),
-                            Pressable(
-                              onTap: () => setState(() => _draftSteps.removeAt(idx)),
-                              semanticLabel: 'Elimina step',
-                              child: Icon(LucideIcons.x, size: 14, color: isCurrent ? Colors.white : (isPause ? p.ink3 : C.crimson)),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  isPause ? LucideIcons.pause : LucideIcons.zap,
+                                  size: 13,
+                                  color: isCurrent
+                                      ? Colors.white
+                                      : (isPause ? p.ink2 : C.crimson),
+                                ),
+                                const SizedBox(width: S.x1),
+                                Text(
+                                  s.label,
+                                  style: F.cap.copyWith(
+                                    color: isCurrent
+                                        ? Colors.white
+                                        : (isPause ? p.ink2 : C.crimson),
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                const SizedBox(width: S.x1),
+                                Pressable(
+                                  onTap: () => setState(() => _draftSteps.removeAt(idx)),
+                                  semanticLabel: 'Elimina step',
+                                  child: Icon(
+                                    LucideIcons.x,
+                                    size: 14,
+                                    color: isCurrent ? Colors.white : (isPause ? p.ink3 : C.crimson),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  const SizedBox(height: S.x4),
+
+                  // ── SEZIONE 1: VIBRAZIONE PERSONALIZZATA ──
+                  Container(
+                    padding: const EdgeInsets.all(S.x3),
+                    decoration: BoxDecoration(
+                      color: p.card2,
+                      borderRadius: R.rSm,
+                      border: Border.all(color: p.wash(C.crimson)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(LucideIcons.zap, size: 16, color: C.crimson),
+                            const SizedBox(width: S.x2),
+                            Text('Durata Vibrazione', style: F.cap.copyWith(color: p.ink, fontWeight: FontWeight.w600)),
+                            const Spacer(),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: S.x2, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: p.wash(C.crimson),
+                                borderRadius: R.rPill,
+                              ),
+                              child: Text(
+                                '$_vibeDurationMs ms (${(_vibeDurationMs / 1000).toStringAsFixed(2)}s)',
+                                style: F.cap.copyWith(color: C.crimson, fontWeight: FontWeight.w700),
+                              ),
                             ),
                           ],
                         ),
-                      );
-                    }).toList(),
+                        const SizedBox(height: S.x2),
+                        Slider(
+                          value: _vibeDurationMs.toDouble().clamp(50, 3000),
+                          min: 50,
+                          max: 3000,
+                          divisions: 59,
+                          activeColor: C.crimson,
+                          inactiveColor: p.card,
+                          onChanged: (val) {
+                            setState(() => _vibeDurationMs = (val / 50).round() * 50);
+                          },
+                        ),
+                        Row(
+                          children: [
+                            _stepperBtn(p, '-100', () {
+                              setState(() => _vibeDurationMs = (_vibeDurationMs - 100).clamp(50, 3000));
+                            }),
+                            const SizedBox(width: S.x1),
+                            _stepperBtn(p, '-50', () {
+                              setState(() => _vibeDurationMs = (_vibeDurationMs - 50).clamp(50, 3000));
+                            }),
+                            const SizedBox(width: S.x1),
+                            _stepperBtn(p, '+50', () {
+                              setState(() => _vibeDurationMs = (_vibeDurationMs + 50).clamp(50, 3000));
+                            }),
+                            const SizedBox(width: S.x1),
+                            _stepperBtn(p, '+100', () {
+                              setState(() => _vibeDurationMs = (_vibeDurationMs + 100).clamp(50, 3000));
+                            }),
+                            const Spacer(),
+                            Wrap(
+                              spacing: 4,
+                              children: [150, 300, 500, 1000].map((ms) {
+                                return _presetPill(
+                                  p,
+                                  ms >= 1000 ? '${(ms / 1000).toStringAsFixed(0)}s' : '${ms}ms',
+                                  _vibeDurationMs == ms,
+                                  () => setState(() => _vibeDurationMs = ms),
+                                  color: C.crimson,
+                                );
+                              }).toList(),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: S.x3),
+                        Pressable(
+                          onTap: () {
+                            setState(() => _draftSteps.add(VibrationStep.vibrate(_vibeDurationMs)));
+                          },
+                          semanticLabel: 'Aggiungi Vibrazione',
+                          child: Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.symmetric(vertical: S.x2),
+                            decoration: BoxDecoration(
+                              color: p.wash(C.crimson),
+                              borderRadius: R.rSm,
+                              border: Border.all(color: C.crimson, width: 1.2),
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Icon(LucideIcons.plus, size: 15, color: C.crimson),
+                                const SizedBox(width: S.x1),
+                                Text(
+                                  'Aggiungi Vibrazione ($_vibeDurationMs ms)',
+                                  style: F.cap.copyWith(color: C.crimson, fontWeight: FontWeight.w700),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                  const SizedBox(height: S.x4),
-                  Text('Aggiungi elemento:', style: F.cap.copyWith(color: p.ink2)),
-                  const SizedBox(height: S.x2),
-                  Wrap(
-                    spacing: S.x2,
-                    runSpacing: S.x2,
-                    children: [
-                      _stepAddChip(p, '+ Tocco Singolo', () {
-                        setState(() => _draftSteps.add(const VibrationStep(VibrationStepType.single)));
-                      }),
-                      _stepAddChip(p, '+ Doppio Tocco', () {
-                        setState(() => _draftSteps.add(const VibrationStep(VibrationStepType.doubleTap)));
-                      }),
-                      _stepAddChip(p, '+ Vibrazione Lunga', () {
-                        setState(() => _draftSteps.add(const VibrationStep(VibrationStepType.alarm)));
-                      }),
-                      _stepAddChip(p, '+ Pausa 200ms', () {
-                        setState(() => _draftSteps.add(const VibrationStep(VibrationStepType.pause, 200)));
-                      }),
-                      _stepAddChip(p, '+ Pausa 400ms', () {
-                        setState(() => _draftSteps.add(const VibrationStep(VibrationStepType.pause, 400)));
-                      }),
-                      _stepAddChip(p, '+ Pausa 600ms', () {
-                        setState(() => _draftSteps.add(const VibrationStep(VibrationStepType.pause, 600)));
-                      }),
-                      _stepAddChip(p, '+ Pausa 1s', () {
-                        setState(() => _draftSteps.add(const VibrationStep(VibrationStepType.pause, 1000)));
-                      }),
-                    ],
+
+                  const SizedBox(height: S.x3),
+
+                  // ── SEZIONE 2: PAUSA PERSONALIZZATA ──
+                  Container(
+                    padding: const EdgeInsets.all(S.x3),
+                    decoration: BoxDecoration(
+                      color: p.card2,
+                      borderRadius: R.rSm,
+                      border: Border.all(color: p.line),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(LucideIcons.pause, size: 16, color: p.ink2),
+                            const SizedBox(width: S.x2),
+                            Text('Durata Pausa', style: F.cap.copyWith(color: p.ink, fontWeight: FontWeight.w600)),
+                            const Spacer(),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: S.x2, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: p.card,
+                                borderRadius: R.rPill,
+                              ),
+                              child: Text(
+                                '$_pauseDurationMs ms (${(_pauseDurationMs / 1000).toStringAsFixed(2)}s)',
+                                style: F.cap.copyWith(color: p.ink, fontWeight: FontWeight.w700),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: S.x2),
+                        Slider(
+                          value: _pauseDurationMs.toDouble().clamp(50, 3000),
+                          min: 50,
+                          max: 3000,
+                          divisions: 59,
+                          activeColor: p.ink2,
+                          inactiveColor: p.card,
+                          onChanged: (val) {
+                            setState(() => _pauseDurationMs = (val / 50).round() * 50);
+                          },
+                        ),
+                        Row(
+                          children: [
+                            _stepperBtn(p, '-100', () {
+                              setState(() => _pauseDurationMs = (_pauseDurationMs - 100).clamp(50, 3000));
+                            }),
+                            const SizedBox(width: S.x1),
+                            _stepperBtn(p, '-50', () {
+                              setState(() => _pauseDurationMs = (_pauseDurationMs - 50).clamp(50, 3000));
+                            }),
+                            const SizedBox(width: S.x1),
+                            _stepperBtn(p, '+50', () {
+                              setState(() => _pauseDurationMs = (_pauseDurationMs + 50).clamp(50, 3000));
+                            }),
+                            const SizedBox(width: S.x1),
+                            _stepperBtn(p, '+100', () {
+                              setState(() => _pauseDurationMs = (_pauseDurationMs + 100).clamp(50, 3000));
+                            }),
+                            const Spacer(),
+                            Wrap(
+                              spacing: 4,
+                              children: [100, 200, 400, 800].map((ms) {
+                                return _presetPill(
+                                  p,
+                                  '${ms}ms',
+                                  _pauseDurationMs == ms,
+                                  () => setState(() => _pauseDurationMs = ms),
+                                  color: p.ink2,
+                                );
+                              }).toList(),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: S.x3),
+                        Pressable(
+                          onTap: () {
+                            setState(() => _draftSteps.add(VibrationStep.pause(_pauseDurationMs)));
+                          },
+                          semanticLabel: 'Aggiungi Pausa',
+                          child: Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.symmetric(vertical: S.x2),
+                            decoration: BoxDecoration(
+                              color: p.card,
+                              borderRadius: R.rSm,
+                              border: Border.all(color: p.line, width: 1.2),
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(LucideIcons.plus, size: 15, color: p.ink),
+                                const SizedBox(width: S.x1),
+                                Text(
+                                  'Aggiungi Pausa ($_pauseDurationMs ms)',
+                                  style: F.cap.copyWith(color: p.ink, fontWeight: FontWeight.w700),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
+
                   const SizedBox(height: S.x4),
+
+                  // ── Pulsanti Azione ──
                   Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
                     children: [
+                      if (_draftSteps.isNotEmpty)
+                        Pressable(
+                          onTap: () => setState(() => _draftSteps.clear()),
+                          semanticLabel: 'Svuota sequenza',
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: S.x3, vertical: S.x2),
+                            decoration: BoxDecoration(
+                              color: p.card2,
+                              borderRadius: R.rPill,
+                            ),
+                            child: Text('Svuota', style: F.cap.copyWith(color: p.ink3)),
+                          ),
+                        ),
+                      const Spacer(),
                       Pressable(
                         onTap: () => _play(app, _draftSteps, id: 'draft'),
                         semanticLabel: 'Prova al polso',
@@ -527,6 +968,11 @@ Azione: Invia Intent
                               v.name,
                               style: F.head.copyWith(color: p.ink, fontWeight: FontWeight.w600),
                             ),
+                            const SizedBox(width: S.x2),
+                            Text(
+                              '${(v.totalDurationMs / 1000).toStringAsFixed(2)}s',
+                              style: F.over.copyWith(color: p.ink3),
+                            ),
                             const Spacer(),
                             Pressable(
                               onTap: () => _play(app, v.steps, id: v.id),
@@ -585,6 +1031,8 @@ Azione: Invia Intent
                             ),
                           ],
                         ),
+                        const SizedBox(height: S.x1),
+                        _buildRhythmBar(p, v.steps, playId: v.id),
                         const SizedBox(height: S.x2),
                         Wrap(
                           spacing: S.x1,
@@ -726,21 +1174,6 @@ Azione: Invia Intent
     );
   }
 
-  Widget _stepAddChip(P p, String label, VoidCallback onTap) {
-    return Pressable(
-      onTap: onTap,
-      semanticLabel: label,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: S.x3, vertical: S.x2),
-        decoration: BoxDecoration(
-          color: p.card2,
-          borderRadius: R.rPill,
-        ),
-        child: Text(label, style: F.cap.copyWith(color: C.silverBright)),
-      ),
-    );
-  }
-
   Widget _presetCard(
     P p,
     AppState app, {
@@ -813,6 +1246,8 @@ Azione: Invia Intent
                 ),
               ],
             ),
+            const SizedBox(height: S.x1),
+            _buildRhythmBar(p, steps, playId: presetName),
             const SizedBox(height: S.x3),
             Row(
               children: [
